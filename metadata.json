@@ -1,0 +1,7 @@
+{
+  "name": "Blueprint",
+  "description": "An AI-augmented, context-aware language learning ecosystem that accelerates vocabulary acquisition and conversational fluency by integrating seamlessly with the user's natural learning habits, guided by personalized goals and motivational feedback.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
