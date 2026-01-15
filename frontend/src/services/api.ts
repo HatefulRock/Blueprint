@@ -1,55 +1,61 @@
+import axios from "axios";
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = "http://localhost:8000";
 
-export const apiRequest = async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
-  try {
-    // Add a timeout to fail fast if backend is down, but give enough time for DB access (5s)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
-    clearTimeout(timeoutId);
+export const apiRequest = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
 
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`);
-    }
-
-    return response.json();
-  } catch (error) {
-    // We throw the error so the calling service can catch it and trigger the fallback.
-    throw error;
-  }
+export const userService = {
+  getUser: (id: number) => api.get(`/users/${id}`),
+  checkIn: (id: number) => api.post(`/users/${id}/check-in`),
+  getProgress: (id: number) => api.get(`/users/${id}/progress`),
 };
 
-export const apiUploadFile = async <T>(endpoint: string, file: File): Promise<T> => {
-    // Uploads might take longer, so we give them a longer timeout (e.g. 10s)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-    
-    try {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-            method: 'POST',
-            body: formData,
-            signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-            throw new Error('File upload failed');
-        }
-
-        return response.json();
-    } catch (error) {
-        throw error;
-    }
+export const wordService = {
+  getWordsByDeck: (deckId: number) => api.get(`/words/deck/${deckId}`),
+  addWord: (wordData: any) => api.post("/words/", wordData),
+  reviewWord: (wordId: number, rating: number) =>
+    api.patch(`/words/${wordId}/review`, null, { params: { rating } }),
 };
+
+export const aiService = {
+  analyzeText: (text: string, lang: string) =>
+    api.post("/ai/analyze", { text, target_language: lang }),
+
+  textToSpeech: (text: string, lang: string) =>
+    api.post("/ai/tts", { text, language: lang }),
+};
+
+export const dashboardService = {
+  getDashboard: (userId: number) => api.get(`/users/${userId}/dashboard`),
+};
+
+export const contentService = {
+  // Import from URL (Scraper)
+  importUrl: (url: string, userId: number) =>
+    api.post("/content/import", { url, user_id: userId }),
+
+  // Get all saved articles
+  getUserContent: (userId: number) => api.get(`/content/user/${userId}`),
+
+  // Save manually pasted text
+  saveManualContent: (title: string, content: string, userId: number) =>
+    api.post("/content/", { title, content, user_id: userId }),
+
+  deleteContent: (contentId: number) => {
+    return api.delete(`/content/${contentId}`);
+  },
+};
+
+export default api;

@@ -1,77 +1,107 @@
-from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from sqlalchemy import (
+    Column, Integer, String, Date, DateTime, Text, ForeignKey, Float
+)
+from sqlalchemy.orm import relationship
+from backend.services.database import Base # Ensure this import points to your actual database.py file
 
-db = SQLAlchemy()
+class User(Base):
+    __tablename__ = "users"
 
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    points = db.Column(db.Integer, default=0)
-    streak = db.Column(db.Integer, default=0)
-    last_active_date = db.Column(db.Date, nullable=True)
-    
-    new_words_this_week = db.Column(db.Integer, default=0)
-    practice_sessions_this_week = db.Column(db.Integer, default=0)
-    week_start_date = db.Column(db.DateTime, default=datetime.utcnow)
+    id = Column(Integer, primary_key=True)
+    username = Column(String(80), unique=True, nullable=False)
+    email = Column(String(120), unique=True, nullable=True) # Added email as it's common
 
-class Goal(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    words_per_week = db.Column(db.Integer, default=20)
-    practice_sessions_per_week = db.Column(db.Integer, default=3)
+    # Progress tracking
+    points = Column(Integer, default=0)
+    streak = Column(Integer, default=0)
+    last_active_date = Column(Date, nullable=True)
 
-class Deck(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    language = db.Column(db.String(50), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Relationship to access words easily
-    words = db.relationship('Word', backref='deck', lazy='dynamic')
-    
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'name': self.name,
-            'language': self.language,
-            'wordCount': self.words.count()
-        }
+    # Weekly stats
+    new_words_this_week = Column(Integer, default=0)
+    practice_sessions_this_week = Column(Integer, default=0)
 
-class Word(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    term = db.Column(db.String(100), nullable=False)
-    context = db.Column(db.Text, nullable=False)
-    familiarity_score = db.Column(db.Integer, default=1)
-    language = db.Column(db.String(50), nullable=False)
-    
-    translation = db.Column(db.String(200))
-    literal_translation = db.Column(db.String(200))
-    grammatical_breakdown = db.Column(db.Text)
-    part_of_speech = db.Column(db.String(50)) 
-    
-    # SRS Fields
-    next_review_date = db.Column(db.DateTime, default=datetime.utcnow)
-    last_reviewed_date = db.Column(db.DateTime, nullable=True)
-    
-    # Deck Linking
-    deck_id = db.Column(db.Integer, db.ForeignKey('deck.id'), nullable=True)
+    # Relationships
+    decks = relationship("Deck", backref="owner", lazy=True)
+    # uselist=False makes this a One-to-One relationship
+    goals = relationship("Goal", backref="users", uselist=False)
+    reading_content = relationship("ReadingContent", backref="users")
 
-    __table_args__ = (
-        db.UniqueConstraint('term', 'language', name='unique_word_per_language'),
+
+# --- ADDED THIS MISSING CLASS ---
+class Goal(Base):
+    __tablename__ = "goals"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # The targets
+    words_per_week = Column(Integer, default=20)
+    practice_sessions_per_week = Column(Integer, default=3)
+
+    updated_at = Column(DateTime, default=datetime.utcnow)
+# --------------------------------
+
+
+class Deck(Base):
+    __tablename__ = "decks"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String(100), nullable=False)
+    language = Column(String(50), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    words = relationship(
+        "Word",
+        backref="deck",
+        cascade="all, delete-orphan"
     )
 
-    def to_dict(self):
-        return {
-            'term': self.term,
-            'context': self.context,
-            'familiarityScore': self.familiarity_score,
-            'language': self.language,
-            'deckId': self.deck_id,
-            'nextReviewDate': self.next_review_date.isoformat() if self.next_review_date else None,
-            'lastReviewedDate': self.last_reviewed_date.isoformat() if self.last_reviewed_date else None,
-            'analysis': {
-                'translation': self.translation,
-                'literalTranslation': self.literal_translation,
-                'grammaticalBreakdown': self.grammatical_breakdown,
-                'partOfSpeech': self.part_of_speech
-            }
-        }
+
+class Word(Base):
+    __tablename__ = "words"
+
+    id = Column(Integer, primary_key=True)
+    deck_id = Column(Integer, ForeignKey("decks.id"), nullable=False)
+
+    term = Column(String(100), nullable=False)
+    context = Column(Text, nullable=False)
+    translation = Column(String(200))
+
+    # Details
+    part_of_speech = Column(String(50))
+    grammatical_breakdown = Column(Text) # Storing JSON as text for simplicity
+    literal_translation = Column(String(200))
+
+    # Spaced Repetition (SRS) Data
+    familiarity_score = Column(Integer, default=0)
+    easiness_factor = Column(Float, default=2.5)
+    interval = Column(Integer, default=0)
+    next_review_date = Column(DateTime, default=datetime.utcnow)
+    last_reviewed_date = Column(DateTime, nullable=True)
+
+
+class ReadingContent(Base):
+    __tablename__ = "reading_content"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    title = Column(String(255), nullable=False)
+    content = Column(Text, nullable=False)
+    source_url = Column(String(500))
+    difficulty_score = Column(String(20))
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PracticeSession(Base):
+    __tablename__ = "practice_sessions"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    session_type = Column(String(50)) # e.g., "flashcards", "chat"
+    score = Column(Integer)
+    timestamp = Column(DateTime, default=datetime.utcnow)
