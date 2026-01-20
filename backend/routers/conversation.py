@@ -27,12 +27,12 @@ async def chat_with_tutor(request: schemas.ChatRequest, db: Session = Depends(ge
         system_instruction = f"You are a {request.tutor_style} {request.target_language} tutor. {scenario_prompt} Always respond in {request.target_language}. Return ONLY JSON with keys 'reply' and 'feedback'."
 
         # Use Gemini to generate the response
-        response_obj = GeminiService.get_chat_response(
-            user_text=request.text,
+response_obj = GeminiService.get_chat_response(
+            user_text=request.text or "",
             target_language=request.target_language,
             scenario=system_instruction,
             history=history,
-            tutor_style=request.tutor_style,
+            tutor_style=request.tutor_style or "Friendly",
             topic=getattr(request, "topic", None),
         )
 
@@ -77,6 +77,9 @@ async def voice_chat_with_tutor(
     target_language: str = Form(...),
     history_json: str = Form(...),
     audio_file: UploadFile = File(...),
+    tutor_style: str = Form("Friendly"),
+    topic: str | None = Form(None),
+    voice: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     """Processes user audio, transcribes it, and responds."""
@@ -95,10 +98,19 @@ async def voice_chat_with_tutor(
             audio_file_path=temp_filename,
             target_language=target_language,
             conversation_history=history,
+            tutor_style=tutor_style,
+            topic=topic,
+            voice=voice,
         )
 
-        # Result from process_audio_tutor should be parsed similarly to the text route
-        data = json.loads(result)
+        # result may be a dict or a JSON string
+        if isinstance(result, dict):
+            data = result
+        else:
+            try:
+                data = json.loads(result)
+            except Exception:
+                data = {"transcription": None, "reply": result, "feedback": None}
 
         # 3. Award points
         user = db.query(models.User).filter(models.User.id == user_id).first()
@@ -106,11 +118,20 @@ async def voice_chat_with_tutor(
             user.points += 15  # More points for speaking!
             db.commit()
 
+        # Generate TTS for assistant reply
+        tts_b64 = None
+        try:
+            tts_b64 = GeminiService.text_to_speech(data.get("reply") or "", language=target_language, voice=voice)
+        except Exception:
+            tts_b64 = None
+
         return schemas.ChatResponse(
             transcription=data.get("transcription"),
             reply=data.get("reply"),
             feedback=data.get("feedback"),
+            tts_base64=tts_b64,
         )
+
 
     finally:
         if os.path.exists(temp_filename):
