@@ -13,8 +13,14 @@ router = APIRouter(prefix="/conversation", tags=["conversation"])
 
 
 @router.post("/message", response_model=schemas.ChatResponse)
-async def chat_with_tutor(request: schemas.ChatRequest, db: Session = Depends(get_db)):
-    """Handles text-based roleplay with feedback. Returns optional base64 TTS audio of the assistant reply."""
+async def chat_with_tutor(
+    request: schemas.ChatRequest,
+    session_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    """Handles text-based roleplay with feedback. Returns optional base64 TTS audio of the assistant reply.
+    If session_id is provided, logs messages against that session; otherwise creates a new PracticeSession.
+    """
 
     try:
         # Convert history for Gemini
@@ -27,7 +33,7 @@ async def chat_with_tutor(request: schemas.ChatRequest, db: Session = Depends(ge
         system_instruction = f"You are a {request.tutor_style} {request.target_language} tutor. {scenario_prompt} Always respond in {request.target_language}. Return ONLY JSON with keys 'reply' and 'feedback'."
 
         # Use Gemini to generate the response
-response_obj = GeminiService.get_chat_response(
+        response_obj = GeminiService.get_chat_response(
             user_text=request.text or "",
             target_language=request.target_language,
             scenario=system_instruction,
@@ -51,6 +57,39 @@ response_obj = GeminiService.get_chat_response(
             user.points += 10
             db.commit()
 
+        # Use existing session_id or create a new PracticeSession for this chat
+        session = None
+        if session_id:
+            session = (
+                db.query(models.PracticeSession)
+                .filter(models.PracticeSession.id == int(session_id))
+                .first()
+            )
+        if not session:
+            try:
+                session = models.PracticeSession(
+                    user_id=request.user_id, session_type="chat", score=0
+                )
+                db.add(session)
+                db.commit()
+                db.refresh(session)
+            except Exception:
+                session = None
+
+        # store messages if we have a session
+        try:
+            if session:
+                um = models.ConversationMessage(
+                    session_id=session.id, author="user", text=request.text or ""
+                )
+                am = models.ConversationMessage(
+                    session_id=session.id, author="ai", text=data.get("reply") or ""
+                )
+                db.add_all([um, am])
+                db.commit()
+        except Exception:
+            pass
+
         # Optionally produce TTS for the assistant reply
         tts_b64 = None
         if getattr(request, "voice", None) or True:
@@ -66,6 +105,7 @@ response_obj = GeminiService.get_chat_response(
             feedback=data.get("feedback"),
             tts_base64=tts_b64,
         )
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -80,9 +120,12 @@ async def voice_chat_with_tutor(
     tutor_style: str = Form("Friendly"),
     topic: str | None = Form(None),
     voice: str | None = Form(None),
+    session_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
 ):
-    """Processes user audio, transcribes it, and responds."""
+    """Processes user audio, transcribes it, and responds.
+    This endpoint also supports session-based logging when session_id is provided or will create one.
+    """
 
     # 1. Save temp audio file
     temp_filename = f"temp_{uuid.uuid4()}.wav"
@@ -118,10 +161,45 @@ async def voice_chat_with_tutor(
             user.points += 15  # More points for speaking!
             db.commit()
 
+        # Ensure there's a session to attach messages
+        session = None
+        if session_id:
+            session = (
+                db.query(models.PracticeSession)
+                .filter(models.PracticeSession.id == int(session_id))
+                .first()
+            )
+        if not session:
+            try:
+                session = models.PracticeSession(
+                    user_id=user.id if user else 0, session_type="chat", score=0
+                )
+                db.add(session)
+                db.commit()
+                db.refresh(session)
+            except Exception:
+                session = None
+
+        # Store conversation messages
+        try:
+            if session:
+                um = models.ConversationMessage(
+                    session_id=session.id, author="user", text="(audio input)"
+                )
+                am = models.ConversationMessage(
+                    session_id=session.id, author="ai", text=data.get("reply") or ""
+                )
+                db.add_all([um, am])
+                db.commit()
+        except Exception:
+            pass
+
         # Generate TTS for assistant reply
         tts_b64 = None
         try:
-            tts_b64 = GeminiService.text_to_speech(data.get("reply") or "", language=target_language, voice=voice)
+            tts_b64 = GeminiService.text_to_speech(
+                data.get("reply") or "", language=target_language, voice=voice
+            )
         except Exception:
             tts_b64 = None
 
@@ -131,7 +209,6 @@ async def voice_chat_with_tutor(
             feedback=data.get("feedback"),
             tts_base64=tts_b64,
         )
-
 
     finally:
         if os.path.exists(temp_filename):

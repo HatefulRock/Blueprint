@@ -158,3 +158,13 @@ class PracticeReview(Base):
 
     quality = Column(Integer)  # 0-5
     timestamp = Column(DateTime, default=datetime.utcnow)
+
+
+class ConversationMessage(Base):
+    __tablename__ = "conversation_messages"
+
+    id = Column(Integer, primary_key=True)
+    session_id = Column(Integer, ForeignKey("practice_sessions.id"), nullable=False)
+    author = Column(String(10))  # 'user' or 'ai'
+    text = Column(Text, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
