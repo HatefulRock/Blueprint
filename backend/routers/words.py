@@ -7,13 +7,159 @@ from .. import models, schemas
 
 router = APIRouter(prefix="/words", tags=["words"])
 
+# --- Flashcards endpoints (Cards, Templates, Decks) ---
+from fastapi import Body
+
+
+@router.post("/cards", response_model=schemas.CardRead)
+def create_card(card: schemas.CardCreate, db: Session = Depends(get_db)):
+    new_card = models.Card(**card.dict())
+    db.add(new_card)
+    db.commit()
+    db.refresh(new_card)
+    return new_card
+
+
+@router.get("/cards/deck/{deck_id}", response_model=List[schemas.CardRead])
+def get_cards_for_deck(deck_id: int, db: Session = Depends(get_db)):
+    return db.query(models.Card).filter(models.Card.deck_id == deck_id).all()
+
+
+@router.post("/templates", response_model=schemas.CardTemplateRead)
+def create_template(t: schemas.CardTemplateCreate, db: Session = Depends(get_db)):
+    new_t = models.CardTemplate(**t.dict())
+    db.add(new_t)
+    db.commit()
+    db.refresh(new_t)
+    return new_t
+
+
+@router.get("/templates/{user_id}", response_model=List[schemas.CardTemplateRead])
+def get_templates(user_id: int, db: Session = Depends(get_db)):
+    return (
+        db.query(models.CardTemplate)
+        .filter(
+            (models.CardTemplate.user_id == user_id)
+            | (models.CardTemplate.user_id == None)
+        )
+        .all()
+    )
+
+
+@router.get("/decks/{user_id}", response_model=List[schemas.DeckRead])
+def get_user_decks(user_id: int, db: Session = Depends(get_db)):
+    return db.query(models.Deck).filter(models.Deck.user_id == user_id).all()
+
+
+@router.get("/cards/due/{deck_id}", response_model=List[schemas.CardRead])
+def get_due_cards(deck_id: int, db: Session = Depends(get_db)):
+    from datetime import datetime
+
+    now = datetime.utcnow()
+    return (
+        db.query(models.Card)
+        .filter(models.Card.deck_id == deck_id, models.Card.next_review_date <= now)
+        .all()
+    )
+
+
+@router.post("/cards/{card_id}/review", response_model=schemas.CardRead)
+def review_card(
+    card_id: int, review: schemas.CardReviewRequest, db: Session = Depends(get_db)
+):
+    from datetime import datetime, timedelta
+
+    card = db.query(models.Card).filter(models.Card.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Card not found")
+
+    q = max(0, min(5, review.rating))
+
+    # SM-2 algorithm
+    if q < 3:
+        card.repetition = 0
+        card.interval = 1
+    else:
+        card.repetition = (card.repetition or 0) + 1
+        if card.repetition == 1:
+            card.interval = 1
+        elif card.repetition == 2:
+            card.interval = 6
+        else:
+            card.interval = int(round(card.interval * card.easiness_factor))
+
+    # Update EF
+    ef = card.easiness_factor or 2.5
+    ef = ef + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
+    card.easiness_factor = max(1.3, ef)
+
+    card.last_reviewed_date = datetime.utcnow()
+    card.next_review_date = datetime.utcnow() + timedelta(days=card.interval)
+
+    # Award points proportional to quality
+    user = (
+        db.query(models.User)
+        .join(models.Deck)
+        .filter(models.Deck.id == card.deck_id)
+        .first()
+    )
+    if user:
+        user.points += q * 5
+
+    db.commit()
+    db.refresh(card)
+    return card
+
+
+@router.post("/templates/init")
+def init_default_templates(db: Session = Depends(get_db)):
+    """Create some default card templates (global, user_id=NULL) if they don't exist."""
+    defaults = [
+        {
+            "name": "Basic",
+            "front_template": "{{term}}",
+            "back_template": "{{translation}}\n\nContext: {{context}}",
+        },
+        {
+            "name": "Cloze",
+            "front_template": "{{cloze_text}}",
+            "back_template": "{{full_text}}",
+        },
+    ]
+    created = []
+    for d in defaults:
+        exists = (
+            db.query(models.CardTemplate)
+            .filter(
+                models.CardTemplate.name == d["name"],
+                models.CardTemplate.user_id == None,
+            )
+            .first()
+        )
+        if not exists:
+            t = models.CardTemplate(
+                user_id=None,
+                name=d["name"],
+                front_template=d["front_template"],
+                back_template=d["back_template"],
+            )
+            db.add(t)
+            db.commit()
+            db.refresh(t)
+            created.append(t.name)
+    return {"created": created}
+
+
 @router.post("/", response_model=schemas.WordRead)
 def add_word(word_data: schemas.WordCreate, db: Session = Depends(get_db)):
     # Check if word already exists in this deck to avoid duplicates
-    existing_word = db.query(models.Word).filter(
-        models.Word.term == word_data.term,
-        models.Word.deck_id == word_data.deck_id
-    ).first()
+    existing_word = (
+        db.query(models.Word)
+        .filter(
+            models.Word.term == word_data.term, models.Word.deck_id == word_data.deck_id
+        )
+        .first()
+    )
 
     if existing_word:
         return existing_word
@@ -24,18 +170,22 @@ def add_word(word_data: schemas.WordCreate, db: Session = Depends(get_db)):
     db.refresh(new_word)
     return new_word
 
+
 @router.get("/deck/{deck_id}", response_model=List[schemas.WordRead])
 def get_words_by_deck(deck_id: int, db: Session = Depends(get_db)):
     return db.query(models.Word).filter(models.Word.deck_id == deck_id).all()
+
 
 @router.get("/due/{deck_id}", response_model=List[schemas.WordRead])
 def get_due_words(deck_id: int, db: Session = Depends(get_db)):
     """Fetch words that are ready for review based on SRS."""
     now = datetime.utcnow()
-    return db.query(models.Word).filter(
-        models.Word.deck_id == deck_id,
-        models.Word.next_review_date <= now
-    ).all()
+    return (
+        db.query(models.Word)
+        .filter(models.Word.deck_id == deck_id, models.Word.next_review_date <= now)
+        .all()
+    )
+
 
 @router.patch("/{word_id}/review")
 def review_word(word_id: int, rating: int, db: Session = Depends(get_db)):
@@ -62,12 +212,18 @@ def review_word(word_id: int, rating: int, db: Session = Depends(get_db)):
     word.next_review_date = datetime.utcnow() + timedelta(days=days_to_add)
 
     # Also award points to the user
-    user = db.query(models.User).join(models.Deck).filter(models.Deck.id == word.deck_id).first()
+    user = (
+        db.query(models.User)
+        .join(models.Deck)
+        .filter(models.Deck.id == word.deck_id)
+        .first()
+    )
     if user:
-        user.points += (rating * 5)
+        user.points += rating * 5
 
     db.commit()
     return {"message": "SRS updated", "next_review": word.next_review_date}
+
 
 @router.delete("/{word_id}")
 def delete_word(word_id: int, db: Session = Depends(get_db)):
@@ -78,6 +234,7 @@ def delete_word(word_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Word deleted"}
 
+
 @router.post("/decks")
 def create_deck(name: str, language: str, user_id: int, db: Session = Depends(get_db)):
     new_deck = models.Deck(name=name, language=language, user_id=user_id)
@@ -85,6 +242,7 @@ def create_deck(name: str, language: str, user_id: int, db: Session = Depends(ge
     db.commit()
     db.refresh(new_deck)
     return new_deck
+
 
 @router.get("/decks/{user_id}")
 def get_user_decks(user_id: int, db: Session = Depends(get_db)):

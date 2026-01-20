@@ -80,6 +80,63 @@ class ContentRead(ContentBase):
         orm_mode = True
 
 
+# --- Flashcards Schemas ---
+class CardTemplateBase(BaseModel):
+    name: str
+    front_template: str
+    back_template: str
+
+
+class CardTemplateCreate(CardTemplateBase):
+    user_id: Optional[int] = None
+
+
+class CardTemplateRead(CardTemplateBase):
+    id: int
+    user_id: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class CardBase(BaseModel):
+    deck_id: int
+    template_id: Optional[int] = None
+    front: str
+    back: str
+
+
+class CardCreate(CardBase):
+    pass
+
+
+class CardRead(CardBase):
+    id: int
+    repetition: int
+    easiness_factor: float
+    interval: int
+    next_review_date: datetime
+    last_reviewed_date: Optional[datetime] = None
+
+    class Config:
+        orm_mode = True
+
+
+class DeckRead(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    language: str
+
+    class Config:
+        orm_mode = True
+
+
+class CardReviewRequest(BaseModel):
+    rating: int  # 0-5 quality rating as SM-2 (0 worst, 5 perfect)
+
+
 class AnalysisRequest(BaseModel):
     text: str
     target_language: str
