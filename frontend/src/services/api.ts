@@ -11,6 +11,10 @@ const api = axios.create({
 
 // unwrap response to return data directly
 api.interceptors.response.use((response) => response.data, (error) => Promise.reject(error));
+api.defaults.headers.post['Content-Type'] = 'application/json';
+
+// We will export a typed wrapper that returns the axios response data directly
+export type ApiResponse<T> = Promise<T>;
 
 export const apiRequest = axios.create({
   baseURL: API_BASE_URL,
@@ -28,21 +32,62 @@ export const userService = {
 };
 
 export const wordService = {
-  getWordsByDeck: (deckId: number) => api.get(`/words/deck/${deckId}`),
-  addWord: (wordData: any) => api.post("/words/", wordData),
-  reviewWord: (wordId: number, rating: number) =>
-    api.patch(`/words/${wordId}/review`, null, { params: { rating } }),
+  getWordsByDeck: async (deckId: number) => {
+    const res = await api.get(`/words/deck/${deckId}`);
+    return res as any;
+  },
+  addWord: async (wordData: any) => {
+    const res = await api.post("/words/", wordData);
+    return res as any;
+  },
+  reviewWord: async (wordId: number, rating: number) => {
+    const res = await api.patch(`/words/${wordId}/review`, null, { params: { rating } });
+    return res as any;
+  },
   // Deck import (multipart)
-  importDeck: (formData: FormData) => api.post(`/words/decks/import`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  importDeck: async (formData: FormData) => {
+    const res = await api.post(`/words/decks/import`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return res as any;
+  },
+  // Decks
+  getDecks: async (userId: number) => {
+    const res = await api.get(`/words/decks/${userId}`);
+    return res as any;
+  },
+  createDeck: async (payload: any) => {
+    const res = await api.post(`/words/decks`, payload);
+    return res as any;
+  },
 
   // Cards and templates
-  getDueCards: (deckId: number) => api.get(`/words/cards/due/${deckId}`),
-  getCardsForDeck: (deckId: number) => api.get(`/words/cards/deck/${deckId}`),
-  reviewCard: (cardId: number, rating: number) => api.post(`/words/cards/${cardId}/review`, { rating }),
-  createCardFromWord: (wordId: number, templateId?: number) => api.post(`/words/cards/from_word/${wordId}`, { template_id: templateId }),
-  bulkCreateFromDeck: (deckId: number, templateId?: number) => api.post(`/words/cards/from_deck/${deckId}`, { template_id: templateId }),
-  getTemplates: (userId: number) => api.get(`/words/templates/${userId}`),
-  createTemplate: (data: any) => api.post(`/words/templates`, data),
+  getDueCards: async (deckId: number) => {
+    const res = await api.get(`/words/cards/due/${deckId}`);
+    return res as any;
+  },
+  getCardsForDeck: async (deckId: number) => {
+    const res = await api.get(`/words/cards/deck/${deckId}`);
+    return res as any;
+  },
+  reviewCard: async (cardId: number, rating: number) => {
+    const res = await api.post(`/words/cards/${cardId}/review`, { rating });
+    return res as any;
+  },
+  createCardFromWord: async (wordId: number, templateId?: number) => {
+    const res = await api.post(`/words/cards/from_word/${wordId}`, { template_id: templateId });
+    return res as any;
+  },
+  bulkCreateFromDeck: async (deckId: number, templateId?: number) => {
+    const res = await api.post(`/words/cards/from_deck/${deckId}`, { template_id: templateId });
+    return res as any;
+  },
+  getTemplates: async (userId: number) => {
+    const res = await api.get(`/words/templates/${userId}`);
+    return res as any;
+  },
+  createTemplate: async (data: any) => {
+    const res = await api.post(`/words/templates`, data);
+    return res as any;
+  },
 };
 
 export const aiService = {

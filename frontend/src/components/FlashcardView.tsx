@@ -156,8 +156,12 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
     // Fetch Decks on Mount
     useEffect(() => {
         const loadDecks = async () => {
-            const fetchedDecks = await wordService.getDecks(1);
-            setDecks(fetchedDecks);
+            try {
+                const fetchedDecks = await wordService.getDecks(1);
+                setDecks(fetchedDecks as unknown as Deck[]);
+            } catch (e) {
+                console.error('Failed to fetch decks', e);
+            }
         };
         loadDecks();
     }, [targetLanguage]);
@@ -208,7 +212,16 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
         }
 
         try {
-            const queue = await generateFlashcardSession(reviewMode, sessionWords);
+            // Prefer server-sourced due cards for correct SRS behavior
+            let queue: any[] = [];
+            if (deckId !== null) {
+                const res: any = await wordService.getDueCards(deckId);
+                queue = Array.isArray(res) ? res : [];
+            } else {
+                // For All Vocabulary, fetch due cards per deck or fallback to client generation
+                queue = await generateFlashcardSession(reviewMode, sessionWords) as any[];
+            }
+
             setReviewQueue(queue);
             setCurrentIndex(0);
             setIsFlipped(false);
@@ -224,9 +237,16 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
         setIsLoading(true);
         setShowImportModal(false);
         try {
-            const result = await importDeck(file, name, targetLanguage);
-            setDecks(prev => [...prev, result.deck]);
-            alert(`Imported ${result.importedCount} words into "${result.deck.name}". Refresh the page to see new words in the session.`);
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('name', name);
+            formData.append('language', targetLanguage);
+
+            const result: any = await wordService.importDeck(formData);
+            // API returns { deck: {id,name,language}, importedCount }
+            const deck = result?.deck || result;
+            setDecks(prev => [...prev, deck]);
+            alert(`Imported ${result?.importedCount ?? 0} words into "${deck?.name ?? 'deck'}".`);
         } catch (e) {
             console.error(e);
             alert("Import failed.");
@@ -239,7 +259,8 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
         const name = prompt("Enter name for new deck:");
         if (name) {
             try {
-                const newDeck = await createDeck(name, targetLanguage);
+                const payload = { name, language: targetLanguage, user_id: 1 };
+                const newDeck = await wordService.createDeck(payload);
                 setDecks(prev => [...prev, newDeck]);
             } catch (e) {
                 console.error(e);
@@ -247,17 +268,37 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
         }
     }
 
-    const handleAssessment = (knewIt: boolean) => {
-        const currentWord = reviewQueue[currentIndex];
-        if (!currentWord) return;
-        
-        onFamiliarityChange(currentWord.term, knewIt ? 1 : -1);
+    const handleAssessment = async (knewIt: boolean) => {
+        const currentItem: any = reviewQueue[currentIndex];
+        if (!currentItem) return;
 
-        // Move to next card after a short delay
-        setTimeout(() => {
-            setIsFlipped(false);
-            setCurrentIndex(prev => prev + 1);
-        }, 300);
+        // Map simple UI binary buttons to SM-2 quality score (0-5)
+        const quality = knewIt ? 5 : 2;
+
+        try {
+            // If the item is a server Card (has id), call reviewCard API
+            if (currentItem.id) {
+                // call backend to update SRS
+                try {
+                    const updatedCard: any = await wordService.reviewCard(currentItem.id, quality);
+                    // replace item in queue with updated card if returned
+                    const newQueue = [...reviewQueue];
+                    newQueue[currentIndex] = updatedCard as any;
+                    setReviewQueue(newQueue);
+                } catch (apiErr) {
+                    console.error('Failed to submit card review', apiErr);
+                }
+            } else {
+                // Fallback for word-based queues
+                onFamiliarityChange(currentItem.term, knewIt ? 1 : -1);
+            }
+        } finally {
+            // Move to next card after a short delay
+            setTimeout(() => {
+                setIsFlipped(false);
+                setCurrentIndex(prev => prev + 1);
+            }, 300);
+        }
     };
 
     const handleComplete = () => {
