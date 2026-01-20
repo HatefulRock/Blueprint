@@ -141,3 +141,20 @@ class PracticeSession(Base):
     session_type = Column(String(50))  # e.g., "flashcards", "chat"
     score = Column(Integer)
     timestamp = Column(DateTime, default=datetime.utcnow)
+
+    # reviews relationship
+    reviews = relationship(
+        "PracticeReview", backref="session", cascade="all, delete-orphan"
+    )
+
+
+class PracticeReview(Base):
+    __tablename__ = "practice_reviews"
+
+    id = Column(Integer, primary_key=True)
+    session_id = Column(Integer, ForeignKey("practice_sessions.id"), nullable=True)
+    card_id = Column(Integer, ForeignKey("cards.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    quality = Column(Integer)  # 0-5
+    timestamp = Column(DateTime, default=datetime.utcnow)

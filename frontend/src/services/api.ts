@@ -58,6 +58,11 @@ export const wordService = {
     const res = await api.post(`/words/decks`, payload);
     return res as any;
   },
+  // Study session
+  createStudySession: async (payload: any) => {
+    const res = await api.post(`/practice/session`, payload);
+    return res as any;
+  },
 
   // Cards and templates
   getDueCards: async (deckId: number) => {
@@ -68,8 +73,10 @@ export const wordService = {
     const res = await api.get(`/words/cards/deck/${deckId}`);
     return res as any;
   },
-  reviewCard: async (cardId: number, rating: number) => {
-    const res = await api.post(`/words/cards/${cardId}/review`, { rating });
+  reviewCard: async (cardId: number, rating: number, session_id?: number | null) => {
+    const payload: any = { rating };
+    if (session_id) payload.session_id = session_id;
+    const res = await api.post(`/words/cards/${cardId}/review`, payload);
     return res as any;
   },
   createCardFromWord: async (wordId: number, templateId?: number) => {

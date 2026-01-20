@@ -205,12 +205,21 @@ def review_card(
     if user:
         user.points += q * 5
 
-    # Log practice session analytics
+    # If session_id provided, create a PracticeReview record linked to the session
+    session_id = None
     try:
-        ps = models.PracticeSession(
-            user_id=user.id if user else 0, session_type="flashcards", score=q
+        session_id = review.session_id
+    except Exception:
+        session_id = None
+
+    try:
+        pr = models.PracticeReview(
+            session_id=session_id,
+            card_id=card.id,
+            user_id=user.id if user else 0,
+            quality=q,
         )
-        db.add(ps)
+        db.add(pr)
     except Exception:
         pass
 

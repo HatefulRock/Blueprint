@@ -106,4 +106,15 @@ from datetime import datetime
         }
         for c in cards
     ]
-    return {"cards": out}
+
+    # Create a PracticeSession record for analytics
+    try:
+        session = models.PracticeSession(user_id=int(user_id) if user_id else 0, session_type="flashcards", score=0)
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+        session_id = session.id
+    except Exception:
+        session_id = None
+
+    return {"cards": out, "session_id": session_id}
