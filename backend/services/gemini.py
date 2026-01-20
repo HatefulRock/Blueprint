@@ -12,7 +12,8 @@ client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 # Define your model name as a string constant
 # Note: Ensure 'gemini-2.0-flash-exp' or specific version exists.
 # 'gemini-3' is likely a typo unless you have private access.
-MODEL_ID = 'gemini-2.0-flash-exp'
+MODEL_ID = "gemini-2.0-flash-exp"
+
 
 class GeminiService:
     @staticmethod
@@ -32,11 +33,12 @@ class GeminiService:
         response = client.models.generate_content(
             model=MODEL_ID,
             contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
-            )
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
-        return json.loads(response.text)
+        try:
+            return json.loads(response.text)
+        except Exception:
+            return response.text
 
     @staticmethod
     async def analyze_text_stream(text: str, target_language: str):
@@ -45,8 +47,7 @@ class GeminiService:
 
         # UPDATED: Use generate_content_stream
         response = client.models.generate_content_stream(
-            model=MODEL_ID,
-            contents=prompt
+            model=MODEL_ID, contents=prompt
         )
 
         for chunk in response:
@@ -57,7 +58,7 @@ class GeminiService:
     def generate_practice_quiz(words: list, target_language: str):
         prompt = f"""
         Create a 5-question quiz for a student learning {target_language}.
-        Focus on these words: {', '.join(words)}.
+        Focus on these words: {", ".join(words)}.
         Return JSON format: [{{ "question": "", "options": ["", ""], "answer": "", "explanation": "" }}]
         """
 
@@ -65,14 +66,17 @@ class GeminiService:
         response = client.models.generate_content(
             model=MODEL_ID,
             contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
-            )
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
-        return json.loads(response.text)
+        try:
+            return json.loads(response.text)
+        except Exception:
+            return response.text
 
     @staticmethod
-    def process_audio_tutor(audio_file_path: str, target_language: str, conversation_history: list):
+    def process_audio_tutor(
+        audio_file_path: str, target_language: str, conversation_history: list
+    ):
         """
         Accepts an audio file and returns critique + response.
         """
@@ -81,7 +85,9 @@ class GeminiService:
             audio_content = f.read()
 
         # Context for the AI Tutor
-        history_context = "\n".join([f"{m['role']}: {m['content']}" for m in conversation_history])
+        history_context = "\n".join(
+            [f"{m['role']}: {m['content']}" for m in conversation_history]
+        )
 
         prompt_text = (
             f"You are a friendly {target_language} language tutor. "
@@ -99,7 +105,7 @@ class GeminiService:
             model=MODEL_ID,
             contents=[
                 prompt_text,
-                types.Part.from_bytes(data=audio_content, mime_type="audio/mp3")
+                types.Part.from_bytes(data=audio_content, mime_type="audio/mp3"),
             ],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -108,28 +114,25 @@ class GeminiService:
                     "properties": {
                         "transcription": {"type": "STRING"},
                         "reply": {"type": "STRING"},
-                        "feedback": {"type": "STRING"}
-                    }
-                }
-            )
+                        "feedback": {"type": "STRING"},
+                    },
+                },
+            ),
         )
 
         return response.text
 
     @staticmethod
-    def get_chat_response(user_text: str, target_language: str, scenario: str, history: list = []):
+    def get_chat_response(
+        user_text: str, target_language: str, scenario: str, history: list = []
+    ):
         # UPDATED: Chat syntax
-        chat = client.chats.create(
-            model=MODEL_ID,
-            history=history
-        )
+        chat = client.chats.create(model=MODEL_ID, history=history)
 
         prompt = f"{scenario}\nUser says: {user_text}"
 
         response = chat.send_message(
             message=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
-            )
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
         return response.text

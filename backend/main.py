@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import users, words, content, ai, conversation
+from .routers import users, words, content, ai, conversation, leaderboard
 from backend.models import User, Deck, Word, Goal, ReadingContent, PracticeSession
 from backend.services.database import engine, Base
 
@@ -31,6 +31,7 @@ app.include_router(words.router)
 app.include_router(content.router)
 app.include_router(ai.router)
 app.include_router(conversation.router)
+
 
 @app.get("/")
 def root():

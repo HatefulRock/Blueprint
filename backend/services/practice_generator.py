@@ -1,6 +1,7 @@
 import json
 from typing import List
-from .gemini import model
+from .gemini import GeminiService
+
 
 class PracticeGenerator:
     @staticmethod
@@ -15,7 +16,7 @@ class PracticeGenerator:
             {
                 "term": w["term"],
                 "translation": w["translation"],
-                "context": w.get("context", "")
+                "context": w.get("context", ""),
             }
             for w in words_list
         ]
@@ -48,11 +49,12 @@ class PracticeGenerator:
         """
 
         try:
-            response = model.generate_content(
-                prompt,
-                generation_config={"response_mime_type": "application/json"}
+            # Use GeminiService to generate a quiz. GeminiService.generate_practice_quiz
+            # returns parsed JSON (or None on failure).
+            response = GeminiService.generate_practice_quiz(
+                [w["term"] for w in simplified_words], target_language
             )
-            return json.loads(response.text)
+            return response
         except Exception as e:
             print(f"Error generating quiz: {e}")
             return None
