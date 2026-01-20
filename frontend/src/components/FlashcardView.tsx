@@ -88,6 +88,10 @@ const ModeButton = ({ label, isActive, onClick, disabled }: { label: string, isA
     </button>
 )
 
+const ReviewButton = ({ label, onClick, colorClass }: { label: string, onClick: () => void, colorClass: string }) => (
+    <button onClick={onClick} className={`px-6 py-3 rounded-lg font-bold ${colorClass} text-white`}>{label}</button>
+)
+
 const ImportModal = ({ onClose, onImport, language }: { onClose: () => void, onImport: (file: File, name: string) => void, language: string }) => {
     const [file, setFile] = useState<File | null>(null);
     const [name, setName] = useState('');
@@ -268,20 +272,23 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
         }
     }
 
-    const handleAssessment = async (knewIt: boolean) => {
+    const handleAssessment = async (isPositive: boolean, mode: 'Again' | 'Hard' | 'Good' | 'Easy' = 'Good') => {
         const currentItem: any = reviewQueue[currentIndex];
         if (!currentItem) return;
 
-        // Map simple UI binary buttons to SM-2 quality score (0-5)
-        const quality = knewIt ? 5 : 2;
+        // Map review buttons to SM-2 quality scores
+        let quality = 3; // default
+        switch(mode) {
+            case 'Again': quality = 0; break;
+            case 'Hard': quality = 3; break;
+            case 'Good': quality = 4; break;
+            case 'Easy': quality = 5; break;
+        }
 
         try {
-            // If the item is a server Card (has id), call reviewCard API
             if (currentItem.id) {
-                // call backend to update SRS
                 try {
                     const updatedCard: any = await wordService.reviewCard(currentItem.id, quality);
-                    // replace item in queue with updated card if returned
                     const newQueue = [...reviewQueue];
                     newQueue[currentIndex] = updatedCard as any;
                     setReviewQueue(newQueue);
@@ -289,11 +296,10 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
                     console.error('Failed to submit card review', apiErr);
                 }
             } else {
-                // Fallback for word-based queues
-                onFamiliarityChange(currentItem.term, knewIt ? 1 : -1);
+                // fallback
+                onFamiliarityChange(currentItem.term, isPositive ? 1 : -1);
             }
         } finally {
-            // Move to next card after a short delay
             setTimeout(() => {
                 setIsFlipped(false);
                 setCurrentIndex(prev => prev + 1);
@@ -483,18 +489,10 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
 
             {isFlipped && (
                 <div className="flex items-center gap-4 animate-fade-in">
-                    <button 
-                        onClick={() => handleAssessment(false)}
-                        className="px-8 py-3 bg-red-600/80 hover:bg-red-600 text-white font-bold rounded-lg transition-colors shadow-lg shadow-red-900/20"
-                    >
-                        Didn't know
-                    </button>
-                    <button 
-                        onClick={() => handleAssessment(true)}
-                        className="px-8 py-3 bg-emerald-600/80 hover:bg-emerald-600 text-white font-bold rounded-lg transition-colors shadow-lg shadow-emerald-900/20"
-                    >
-                        I knew it
-                    </button>
+                    <ReviewButton label="Again" onClick={() => handleAssessment(false, 'Again')} colorClass="bg-red-600/80 hover:bg-red-600 shadow-lg shadow-red-900/20" />
+                    <ReviewButton label="Hard" onClick={() => handleAssessment(false, 'Hard')} colorClass="bg-orange-600/80 hover:bg-orange-600 shadow-lg shadow-orange-900/20" />
+                    <ReviewButton label="Good" onClick={() => handleAssessment(true, 'Good')} colorClass="bg-emerald-600/80 hover:bg-emerald-600 shadow-lg shadow-emerald-900/20" />
+                    <ReviewButton label="Easy" onClick={() => handleAssessment(true, 'Easy')} colorClass="bg-sky-600/80 hover:bg-sky-600 shadow-lg shadow-sky-900/20" />
                 </div>
             )}
         </div>
