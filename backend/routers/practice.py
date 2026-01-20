@@ -1,8 +1,10 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Body
 from sqlalchemy.orm import Session
+import datetime
 
+from .. import models
 from ..models import Word
 from ..services.database import get_db
 from ..services.practice_generator import PracticeGenerator
@@ -44,15 +46,18 @@ def create_study_session(payload: dict = Body(...), db: Session = Depends(get_db
     payload: {deck_id: int|null, user_id: int, limit: int}
     Returns list of Card objects ready for review ordered by priority.
     """
-    from sqlalchemy import asc
+from sqlalchemy import asc
+from datetime import datetime
+
 
     deck_id = payload.get("deck_id")
     user_id = payload.get("user_id")
     limit = int(payload.get("limit", 20))
 
-    now = datetime.utcnow()
+    now = datetime.datetime.utcnow()
 
     query = db.query(models.Card)
+
     if deck_id is not None:
         query = query.filter(models.Card.deck_id == int(deck_id))
     else:

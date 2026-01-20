@@ -205,6 +205,15 @@ def review_card(
     if user:
         user.points += q * 5
 
+    # Log practice session analytics
+    try:
+        ps = models.PracticeSession(
+            user_id=user.id if user else 0, session_type="flashcards", score=q
+        )
+        db.add(ps)
+    except Exception:
+        pass
+
     db.commit()
     db.refresh(card)
     return card

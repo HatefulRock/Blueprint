@@ -208,22 +208,24 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
     const handleStartSession = useCallback(async (deckId: number | null) => {
         setIsLoading(true);
         setSelectedDeckId(deckId);
-        
-        // Filter words based on deck selection
+
+        // Filter words based on deck selection (used for client fallback only)
         let sessionWords = wordBank;
         if (deckId !== null) {
             sessionWords = wordBank.filter(w => w.deckId === deckId);
         }
 
         try {
-            // Prefer server-sourced due cards for correct SRS behavior
+            // Use server-curated study session when 'All Vocabulary' is requested
             let queue: any[] = [];
             if (deckId !== null) {
                 const res: any = await wordService.getDueCards(deckId);
                 queue = Array.isArray(res) ? res : [];
             } else {
-                // For All Vocabulary, fetch due cards per deck or fallback to client generation
-                queue = await generateFlashcardSession(reviewMode, sessionWords) as any[];
+                // Create a cross-deck session via /practice/session
+                const payload = { deck_id: null, user_id: 1, limit: 20 };
+                const res: any = await wordService.createStudySession(payload);
+                queue = res.cards || [];
             }
 
             setReviewQueue(queue);
