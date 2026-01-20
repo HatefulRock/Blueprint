@@ -1,17 +1,19 @@
 import os
 import json
+import base64
+from io import BytesIO
+from dotenv import load_dotenv
+
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
+from gtts import gTTS
 
 load_dotenv()
 
 # Configure the SDK
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-# Define your model name as a string constant
-# Note: Ensure 'gemini-2.0-flash-exp' or specific version exists.
-# 'gemini-3' is likely a typo unless you have private access.
+# Model constant
 MODEL_ID = "gemini-2.0-flash-exp"
 
 
@@ -25,11 +27,9 @@ class GeminiService:
         - literal_translation: Word-for-word translation.
         - grammar_breakdown: Detailed explanation of grammar used.
         - vocabulary: A list of objects like {{"term": "...", "pos": "...", "translation": "..."}}
-          containing the most important words in the text.
         - difficulty_level: A1, A2, B1, B2, C1, or C2.
         """
 
-        # UPDATED: Call generate_content on the client.models accessor
         response = client.models.generate_content(
             model=MODEL_ID,
             contents=prompt,
@@ -42,27 +42,17 @@ class GeminiService:
 
     @staticmethod
     async def analyze_text_stream(text: str, target_language: str):
-        """Streams a detailed linguistic breakdown."""
         prompt = f"Explain the grammar and usage of '{text}' in {target_language}. Be thorough."
-
-        # UPDATED: Use generate_content_stream
         response = client.models.generate_content_stream(
             model=MODEL_ID, contents=prompt
         )
-
         for chunk in response:
-            if chunk.text:
+            if getattr(chunk, "text", None):
                 yield f"data: {chunk.text}\n\n"
 
     @staticmethod
     def generate_practice_quiz(words: list, target_language: str):
-        prompt = f"""
-        Create a 5-question quiz for a student learning {target_language}.
-        Focus on these words: {", ".join(words)}.
-        Return JSON format: [{{ "question": "", "options": ["", ""], "answer": "", "explanation": "" }}]
-        """
-
-        # UPDATED: Syntax
+        prompt = f"Create a 5-question quiz for a student learning {target_language}. Focus on these words: {', '.join(words)}. Return JSON array of objects {'{question, options, answer, explanation}'}"
         response = client.models.generate_content(
             model=MODEL_ID,
             contents=prompt,
@@ -75,32 +65,37 @@ class GeminiService:
 
     @staticmethod
     def process_audio_tutor(
-        audio_file_path: str, target_language: str, conversation_history: list
+        audio_file_path: str,
+        target_language: str,
+        conversation_history: list,
+        tutor_style: str = "Friendly",
+        topic: str | None = None,
+        voice: str | None = None,
     ):
-        """
-        Accepts an audio file and returns critique + response.
-        """
-        # UPDATED: File upload syntax for new SDK
+        """Accepts an audio file and returns a dict with transcription, reply and feedback."""
         with open(audio_file_path, "rb") as f:
             audio_content = f.read()
 
-        # Context for the AI Tutor
         history_context = "\n".join(
-            [f"{m['role']}: {m['content']}" for m in conversation_history]
+            [f"{m.get('role')}: {m.get('content')}" for m in conversation_history]
         )
 
+        persona = f"You are a {tutor_style} {target_language} tutor."
+        if topic:
+            persona += f" Topic: {topic}."
+        if voice:
+            persona += f" Use voice hint: {voice}."
+
         prompt_text = (
-            f"You are a friendly {target_language} language tutor. "
-            f"Listen to the user's audio. In your response:\n"
+            f"{persona} Listen to the user's audio. In your response:\n"
             f"1. Transcribe what they said.\n"
-            f"2. Correct any pronunciation or grammar mistakes.\n"
-            f"3. Respond in {target_language} to keep the conversation going.\n"
+            f"2. Provide detailed feedback on pronunciation, tone, and accent, giving phonetic hints where useful.\n"
+            f"3. Correct any grammar mistakes and provide a brief explanation in English.\n"
+            f"4. Reply in {target_language} to continue the conversation.\n"
+            f"Return ONLY JSON with keys: transcription, reply, feedback.\n"
             f"Previous context: {history_context}"
         )
 
-        # UPDATED: Pass content as a list of parts (Text + Audio Bytes)
-        # Note: You can also use client.files.upload, but sending bytes directly
-        # is often easier for short audio clips in the new SDK.
         response = client.models.generate_content(
             model=MODEL_ID,
             contents=[
@@ -120,19 +115,47 @@ class GeminiService:
             ),
         )
 
-        return response.text
+        try:
+            return json.loads(response.text)
+        except Exception:
+            return {"transcription": None, "reply": response.text, "feedback": None}
+
+    @staticmethod
+    def text_to_speech(
+        text: str, language: str = "en", voice: str | None = None
+    ) -> str:
+        """Generate MP3 audio and return base64 string. Uses gTTS as a fallback implementation."""
+        try:
+            tts_lang = language.split("-")[0].lower() if language else "en"
+            buf = BytesIO()
+            tts = gTTS(text=text, lang=tts_lang)
+            tts.write_to_fp(buf)
+            buf.seek(0)
+            return base64.b64encode(buf.read()).decode("utf-8")
+        except Exception:
+            return ""
 
     @staticmethod
     def get_chat_response(
-        user_text: str, target_language: str, scenario: str, history: list = []
+        user_text: str,
+        target_language: str,
+        scenario: str,
+        history: list = [],
+        tutor_style: str = "Friendly",
+        topic: str | None = None,
     ):
-        # UPDATED: Chat syntax
+        persona = f"You are a {tutor_style} {target_language} tutor."
+        if topic:
+            persona += f" Topic: {topic}."
+
+        prompt = f"{persona} {scenario}\nUser says: {user_text}\nReturn ONLY JSON with keys: reply, feedback"
+
         chat = client.chats.create(model=MODEL_ID, history=history)
-
-        prompt = f"{scenario}\nUser says: {user_text}"
-
         response = chat.send_message(
             message=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
-        return response.text
+        try:
+            return json.loads(response.text)
+        except Exception:
+            return response.text

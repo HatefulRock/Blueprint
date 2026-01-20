@@ -110,9 +110,15 @@ class ChatRequest(BaseModel):
     scenario: str  # e.g., "At a coffee shop"
     target_language: str
     history: List[ChatMessage]
+    tutor_style: Optional[str] = "Friendly"
+    topic: Optional[str] = None
+    voice: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
     reply: str
     feedback: Optional[str] = None  # Corrections for the user's mistakes
     transcription: Optional[str] = None  # Used for audio input
+    tts_base64: Optional[str] = (
+        None  # Base64-encoded audio (mp3) of the assistant reply
+    )
