@@ -1,12 +1,14 @@
 from typing import Any, Dict, List, Union
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..services.database import get_db
 from ..services.gemini import GeminiService
 from ..services.web_scraper import WebScraper
+from ..services.file_parser import FileParser
+
 
 router = APIRouter(prefix="/content", tags=["content"])
 
@@ -70,6 +72,63 @@ async def import_from_url(
         title=scraped_data["title"],
         content=scraped_data["text"],
         source_url=import_data.url,
+        difficulty_score=difficulty,
+    )
+    db.add(new_content)
+    db.commit()
+    db.refresh(new_content)
+    return new_content
+
+
+@router.post("/upload", response_model=schemas.ContentRead)
+async def upload_file(
+    user_id: int = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """Upload a PDF or text file, extract content, analyze and save."""
+    # 1. Ensure we only accept pdf or text
+    filename = file.filename or "uploaded"
+    lower = filename.lower()
+    content_text = None
+
+    if lower.endswith(".pdf"):
+        # Save temporarily and extract
+        tmp_path = f"tmp_{filename}"
+        with open(tmp_path, "wb") as f:
+            f.write(await file.read())
+        content_text = FileParser.extract_text_from_pdf(tmp_path)
+        # cleanup
+        try:
+            import os
+
+            os.remove(tmp_path)
+        except Exception:
+            pass
+
+    elif lower.endswith(".txt"):
+        content_text = (await file.read()).decode("utf-8")
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+
+    if not content_text or len(content_text) < 50:
+        raise HTTPException(
+            status_code=400, detail="File contained no extractable text"
+        )
+
+    # 2. Heuristic title
+    title = FileParser.extract_title_from_text(content_text)
+
+    # 3. Use Gemini to estimate difficulty
+    analysis = GeminiService.analyze_text(content_text[:1000], "Target Language")
+    difficulty = extract_difficulty(analysis)
+
+    # 4. Save to DB
+    new_content = models.ReadingContent(
+        user_id=user_id,
+        title=title,
+        content=content_text,
+        source_url=None,
         difficulty_score=difficulty,
     )
     db.add(new_content)
