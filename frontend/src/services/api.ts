@@ -103,6 +103,10 @@ export const aiService = {
 
   textToSpeech: (text: string, lang: string) =>
     api.post("/ai/tts", { text, language: lang }),
+
+  // Conversation endpoints
+  sendMessage: (payload: any) => api.post(`/conversation/message`, payload),
+  sendAudio: (formData: FormData) => api.post(`/conversation/audio`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
 };
 
 export const dashboardService = {

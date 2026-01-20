@@ -4,6 +4,7 @@ import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { TranscriptMessage, PronunciationFeedback } from '../types';
 import { decode, decodeAudioData, createAudioBlob, mergeFloat32Arrays, encodeWAV } from '../utils';
 import { getPronunciationFeedback } from '../services/geminiService';
+import api, { aiService } from '../services/api';
 import { CONVERSATION_SCENARIOS, ConversationScenario } from '../data/conversationScenarios';
 import { ChatBubbleIcon } from './icons/ChatBubbleIcon';
 
@@ -106,7 +107,8 @@ export const ConversationView = ({ targetLanguage }: ConversationViewProps) => {
     const [selectedScenario, setSelectedScenario] = useState<ConversationScenario>(CONVERSATION_SCENARIOS[0]);
 
     const [currentTurn, setCurrentTurn] = useState<{user?: TranscriptMessage, ai?: TranscriptMessage}>({});
-    
+    const [textInput, setTextInput] = useState('');
+
     // Audio Context Refs
     const sessionPromiseRef = useRef<LiveSessionPromise | null>(null);
     const inputAudioContextRef = useRef<AudioContext | null>(null);
@@ -310,8 +312,38 @@ export const ConversationView = ({ targetLanguage }: ConversationViewProps) => {
                                // Clear buffer for next turn
                                audioChunksRef.current = [];
                                
-                               // Trigger async analysis
-                               analyzeLastTurn(userTextToAnalyze, audioToAnalyze);
+                            // Trigger async analysis
+                                analyzeLastTurn(userTextToAnalyze, audioToAnalyze);
+
+                                // Send the user's utterance to the backend conversation audio endpoint for a full AI response
+                                try {
+                                    const fd = new FormData();
+                                    fd.append('user_id', '1');
+                                    fd.append('scenario', selectedScenario.name);
+                                    fd.append('target_language', targetLanguage);
+                                    fd.append('history_json', JSON.stringify(transcript.concat([{ id: Date.now(), author: 'user', text: userTextToAnalyze }])))
+                                    // audioToAnalyze is a base64-encoded WAV string, convert to binary
+                                    const audioBlob = (function(base64) {
+                                        const binary = atob(base64.split(',').pop() || base64);
+                                        const len = binary.length;
+                                        const bytes = new Uint8Array(len);
+                                        for (let i = 0; i < len; i++) {
+                                            bytes[i] = binary.charCodeAt(i);
+                                        }
+                                        return new Blob([bytes.buffer], { type: 'audio/wav' });
+                                    })(audioToAnalyze);
+
+                                    fd.append('audio_file', audioBlob, 'upload.wav');
+
+                                    // call backend
+                                    const res: any = await aiService.sendAudio(fd);
+                                    // res should be ChatResponse-like
+                                    const chat = res;
+                                    const aiMsg: any = { id: Date.now()+1, author: 'ai', text: chat.reply };
+                                    setTranscript((t: TranscriptMessage[]) => [...t, aiMsg]);
+                                } catch (e) {
+                                    console.error('Failed to send audio to backend', e);
+                                }
                            }
                         }
 
@@ -385,6 +417,36 @@ export const ConversationView = ({ targetLanguage }: ConversationViewProps) => {
             stopConversation();
         }
     }, [stopConversation]);
+
+    const handleSendText = async () => {
+        const text = textInput.trim();
+        if (!text) return;
+        setTextInput('');
+
+        // Append user's text to transcript
+        const userMsg: TranscriptMessage = { id: Date.now(), author: 'user', text };
+        setTranscript(t => [...t, userMsg]);
+
+        // Build ChatRequest payload for text API
+        const payload = {
+            user_id: 1,
+            text: text,
+            scenario: selectedScenario.getPrompt(targetLanguage),
+            target_language: targetLanguage,
+            history: transcript.map(m => ({ role: m.author === 'ai' ? 'model' : 'user', content: m.text })),
+            tutor_style: selectedScenario.id === 'tutor' ? 'Friendly' : 'Neutral',
+            topic: selectedScenario.name,
+        };
+
+        try {
+            const res: any = await aiService.sendMessage(payload);
+            const replyText = res.reply || (typeof res === 'string' ? res : JSON.stringify(res));
+            const aiMsg: TranscriptMessage = { id: Date.now()+1, author: 'ai', text: replyText };
+            setTranscript(t => [...t, aiMsg]);
+        } catch (e) {
+            console.error('Failed to send text to backend', e);
+        }
+    };
 
     const handleSelectScenario = (scenario: ConversationScenario) => {
         if (isSessionActive) stopConversation();
@@ -462,6 +524,22 @@ export const ConversationView = ({ targetLanguage }: ConversationViewProps) => {
 
                 {/* Controls Footer */}
                 <div className="p-6 bg-slate-800/30 border-t border-slate-700/50">
+                    <div className="flex items-center gap-4 mb-3">
+                        <input
+                            type="text"
+                            placeholder="Type a message to the tutor..."
+                            value={textInput}
+                            onChange={(e) => setTextInput(e.target.value)}
+                            onKeyDown={async (e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    await handleSendText();
+                                }
+                            }}
+                            className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none"
+                        />
+                        <button onClick={handleSendText} className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg">Send</button>
+                    </div>
                     <div className="flex justify-center items-center gap-6">
                          <button
                             onClick={handleToggleListening}
