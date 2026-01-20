@@ -10,7 +10,7 @@ export const AnalyticsView = ({ userId = 1 }: { userId?: number }) => {
     const load = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/analytics/practice?user_id=${userId}`);
+        const res = await fetch(`${process.env.REACT_APP_API_URL || ''}/analytics/practice?user_id=${userId}`);
         const data = await res.json();
         setStats(data);
       } catch (e) {
