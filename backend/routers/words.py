@@ -334,8 +334,14 @@ def delete_word(word_id: int, db: Session = Depends(get_db)):
     return {"message": "Word deleted"}
 
 
+from fastapi import Body
+
+
 @router.post("/decks")
-def create_deck(name: str, language: str, user_id: int, db: Session = Depends(get_db)):
+def create_deck(payload: dict = Body(...), db: Session = Depends(get_db)):
+    name = payload.get("name")
+    language = payload.get("language")
+    user_id = payload.get("user_id", 1)
     new_deck = models.Deck(name=name, language=language, user_id=user_id)
     db.add(new_deck)
     db.commit()

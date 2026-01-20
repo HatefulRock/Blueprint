@@ -4,10 +4,19 @@ import { db } from "./db";
 
 export const getWords = async (targetLanguage: string): Promise<Word[]> => {
   try {
-    return await apiRequest<Word[]>(`/words?language=${targetLanguage}`);
+    // Fallback: legacy endpoint not present server-side; use all words or adjust as needed
+    return await apiRequest<Word[]>(`/words/deck/0`);
   } catch (error) {
-    // console.debug(`Backend unreachable, using mock words for ${targetLanguage}.`);
     return db.words.filter((w) => w.language === targetLanguage);
+  }
+};
+
+// --- Deck/Import/Card APIs wired to backend endpoints
+export const getDecks = async (userId: number = 1): Promise<Deck[]> => {
+  try {
+    return await apiRequest<Deck[]>(`/words/decks/${userId}`);
+  } catch (error) {
+    return db.decks.filter((d) => d.language === targetLanguage);
   }
 };
 
@@ -65,13 +74,7 @@ export const updateFamiliarity = async (
 
 // --- Deck Services ---
 
-export const getDecks = async (targetLanguage: string): Promise<Deck[]> => {
-  try {
-    return await apiRequest<Deck[]>(`/decks?language=${targetLanguage}`);
-  } catch (error) {
-    return db.decks.filter((d) => d.language === targetLanguage);
-  }
-};
+// Deprecated: getDecks used by older components. Use wordService.getDecks via api.ts instead.
 
 export const importDeck = async (
   file: File,

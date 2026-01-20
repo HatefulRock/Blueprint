@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Word, Deck } from '../types';
 import { generateFlashcardSession } from '../services/practiceService';
-import { getDecks, createDeck, importDeck } from '../services/wordService';
+import api, { wordService } from '../services/api';
+
 import { BoltIcon } from './icons/BoltIcon';
 import { DocumentArrowUpIcon } from './icons/DocumentArrowUpIcon';
 import { ClockIcon } from './icons/ClockIcon';
@@ -155,7 +156,7 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
     // Fetch Decks on Mount
     useEffect(() => {
         const loadDecks = async () => {
-            const fetchedDecks = await getDecks(targetLanguage);
+            const fetchedDecks = await wordService.getDecks(1);
             setDecks(fetchedDecks);
         };
         loadDecks();
