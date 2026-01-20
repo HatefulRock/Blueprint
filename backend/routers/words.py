@@ -184,36 +184,18 @@ def get_due_cards(deck_id: int, db: Session = Depends(get_db)):
 def review_card(
     card_id: int, review: schemas.CardReviewRequest, db: Session = Depends(get_db)
 ):
-    from datetime import datetime, timedelta
+    """Review a card using the shared SRS helper (SM-2)."""
+    from ..services.srs import update_card_after_review
 
     card = db.query(models.Card).filter(models.Card.id == card_id).first()
     if not card:
         raise HTTPException(status_code=404, detail="Card not found")
 
-    q = max(0, min(5, review.rating))
-
-    # SM-2 algorithm
-    if q < 3:
-        card.repetition = 0
-        card.interval = 1
-    else:
-        card.repetition = (card.repetition or 0) + 1
-        if card.repetition == 1:
-            card.interval = 1
-        elif card.repetition == 2:
-            card.interval = 6
-        else:
-            card.interval = int(round(card.interval * card.easiness_factor))
-
-    # Update EF
-    ef = card.easiness_factor or 2.5
-    ef = ef + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
-    card.easiness_factor = max(1.3, ef)
-
-    card.last_reviewed_date = datetime.utcnow()
-    card.next_review_date = datetime.utcnow() + timedelta(days=card.interval)
+    # Apply SRS helper
+    update_card_after_review(card, int(review.rating))
 
     # Award points proportional to quality
+    q = max(0, min(5, review.rating))
     user = (
         db.query(models.User)
         .join(models.Deck)
