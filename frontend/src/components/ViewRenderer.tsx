@@ -10,7 +10,13 @@ import { ReadingSessionView } from "./ReadingSessionView";
 import { VocabularyView } from "./VocabularyView";
 import { FlashcardView } from "./FlashcardView";
 import { PracticeView } from "./PracticeView";
+import { VocabularyView } from "./VocabularyView";
+import { ReaderView } from "./ReaderView";
+import { DashboardView } from "./DashboardView";
+import { ProfileView } from "./ProfileView";
 import { ConversationView } from "./ConversationView";
+import { AnalyticsView } from "./AnalyticsView";
+
 
 export const ViewRenderer: React.FC = () => {
   const {
