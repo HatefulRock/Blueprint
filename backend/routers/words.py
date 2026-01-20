@@ -25,6 +25,123 @@ def get_cards_for_deck(deck_id: int, db: Session = Depends(get_db)):
     return db.query(models.Card).filter(models.Card.deck_id == deck_id).all()
 
 
+@router.post("/cards/from_word/{word_id}", response_model=schemas.CardRead)
+def create_card_from_word(
+    word_id: int, template_id: int | None = None, db: Session = Depends(get_db)
+):
+    """Create a Card by rendering a template against an existing Word record using Jinja2."""
+    from jinja2 import Template
+
+    word = db.query(models.Word).filter(models.Word.id == word_id).first()
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+
+    template = None
+    if template_id:
+        template = (
+            db.query(models.CardTemplate)
+            .filter(models.CardTemplate.id == template_id)
+            .first()
+        )
+    if not template:
+        # fallback to a global Basic template
+        template = (
+            db.query(models.CardTemplate)
+            .filter(
+                models.CardTemplate.name == "Basic", models.CardTemplate.user_id == None
+            )
+            .first()
+        )
+
+    context = {
+        "term": word.term,
+        "translation": word.translation,
+        "context": word.context,
+        "part_of_speech": word.part_of_speech,
+        "literal_translation": word.literal_translation,
+    }
+
+    front = (
+        Template(template.front_template).render(**context) if template else word.term
+    )
+    back = (
+        Template(template.back_template).render(**context)
+        if template
+        else (word.translation or "")
+    )
+
+    new_card = models.Card(
+        deck_id=word.deck_id,
+        template_id=template.id if template else None,
+        front=front,
+        back=back,
+    )
+    db.add(new_card)
+    db.commit()
+    db.refresh(new_card)
+    return new_card
+
+
+@router.post("/cards/from_deck/{deck_id}", response_model=List[schemas.CardRead])
+def bulk_create_cards_from_deck(
+    deck_id: int, template_id: int | None = None, db: Session = Depends(get_db)
+):
+    """Create cards for all words in a deck using the specified template (or default). Returns created cards."""
+    from jinja2 import Template
+
+    words = db.query(models.Word).filter(models.Word.deck_id == deck_id).all()
+    if not words:
+        return []
+
+    template = None
+    if template_id:
+        template = (
+            db.query(models.CardTemplate)
+            .filter(models.CardTemplate.id == template_id)
+            .first()
+        )
+    if not template:
+        template = (
+            db.query(models.CardTemplate)
+            .filter(
+                models.CardTemplate.name == "Basic", models.CardTemplate.user_id == None
+            )
+            .first()
+        )
+
+    created = []
+    for w in words:
+        context = {
+            "term": w.term,
+            "translation": w.translation,
+            "context": w.context,
+            "part_of_speech": w.part_of_speech,
+            "literal_translation": w.literal_translation,
+        }
+        front = (
+            Template(template.front_template).render(**context) if template else w.term
+        )
+        back = (
+            Template(template.back_template).render(**context)
+            if template
+            else (w.translation or "")
+        )
+        card = models.Card(
+            deck_id=deck_id,
+            template_id=template.id if template else None,
+            front=front,
+            back=back,
+        )
+        db.add(card)
+        created.append(card)
+
+    db.commit()
+    # refresh created cards
+    for c in created:
+        db.refresh(c)
+    return created
+
+
 @router.post("/templates", response_model=schemas.CardTemplateRead)
 def create_template(t: schemas.CardTemplateCreate, db: Session = Depends(get_db)):
     new_t = models.CardTemplate(**t.dict())
