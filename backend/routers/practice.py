@@ -118,3 +118,27 @@ from datetime import datetime
         session_id = None
 
     return {"cards": out, "session_id": session_id}
+
+
+@router.get('/sessions')
+def list_practice_sessions(user_id: int, limit: int = 20, db: Session = Depends(get_db)):
+    """Return recent practice sessions for a user."""
+    sessions = (
+        db.query(models.PracticeSession)
+        .filter(models.PracticeSession.user_id == int(user_id))
+        .order_by(models.PracticeSession.timestamp.desc())
+        .limit(int(limit))
+        .all()
+    )
+
+    out = [
+        {
+            'id': s.id,
+            'user_id': s.user_id,
+            'session_type': s.session_type,
+            'score': s.score,
+            'timestamp': s.timestamp.isoformat() if s.timestamp else None,
+        }
+        for s in sessions
+    ]
+    return {'sessions': out}
