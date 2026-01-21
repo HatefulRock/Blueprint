@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Optional, Dict, Any
+from typing import Optional
 from ..services.database import get_db
 from .. import models, schemas
+from ..services.cache import cache, make_dict_key
 
 router = APIRouter(prefix="/vocab", tags=["vocab"])
 
@@ -54,6 +55,14 @@ def capture_vocab(payload: schemas.VocabCaptureRequest, db: Session = Depends(ge
 
         db.commit()
         db.refresh(existing)
+
+        # Invalidate dictionary cache for this term to ensure subsequent lookups reflect updates
+        try:
+            key = make_dict_key(term, "", None)
+            cache.delete(key)
+        except Exception:
+            pass
+
         return {"action": "updated", "word": existing}
 
     new_word = models.Word(
@@ -80,8 +89,46 @@ def capture_vocab(payload: schemas.VocabCaptureRequest, db: Session = Depends(ge
         db.add(wc)
         db.commit()
 
+    # Invalidate dictionary cache for this term after creation
+    try:
+        key = make_dict_key(term, "", None)
+        cache.delete(key)
+    except Exception:
+        pass
+
     db.refresh(new_word)
     return {"action": "created", "word": new_word}
+
+
+@router.get("/{word_id}/detail", response_model=schemas.VocabWordDetailResponse)
+def get_word_detail(word_id: int, db: Session = Depends(get_db)):
+    """Return word plus its contexts."""
+    w = db.query(models.Word).filter(models.Word.id == word_id).first()
+    if not w:
+        raise HTTPException(status_code=404, detail="Word not found")
+
+    contexts = (
+        db.query(models.WordContext)
+        .filter(models.WordContext.word_id == word_id)
+        .order_by(models.WordContext.created_at.desc())
+        .all()
+    )
+    return {"word": w, "contexts": contexts}
+
+
+@router.post("/{word_id}/invalidate_cache")
+def invalidate_word_cache(word_id: int, db: Session = Depends(get_db)):
+    """Invalidate dictionary cache for a given word (by term)."""
+    w = db.query(models.Word).filter(models.Word.id == word_id).first()
+    if not w:
+        raise HTTPException(status_code=404, detail="Word not found")
+
+    try:
+        key = make_dict_key(w.term, "", None)
+        cache.delete(key)
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     """
     Capture a word from the reader with its context sentence and optional reading_content reference.
     Payload flexible to accept camelCase from frontend.

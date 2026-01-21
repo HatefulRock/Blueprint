@@ -26,6 +26,9 @@ class RedisCache:
         if raw is None:
             return None
         try:
+            # redis returns bytes
+            if isinstance(raw, bytes):
+                raw = raw.decode("utf-8")
             return json.loads(raw)
         except Exception:
             return None
@@ -34,6 +37,12 @@ class RedisCache:
         raw = json.dumps(value)
         # setex ensures TTL
         self.client.setex(key, ttl, raw)
+
+    def delete(self, key: str):
+        try:
+            self.client.delete(key)
+        except Exception:
+            pass
 
 
 class InMemoryCache:
@@ -56,6 +65,15 @@ class InMemoryCache:
     def set(self, key: str, value: dict, ttl: int = 3600):
         expire = time.time() + ttl if ttl else None
         self.store[key] = (expire, value)
+
+    def delete(self, key: str):
+        if key in self.store:
+            del self.store[key]
+
+
+def make_dict_key(term: str, target_language: str, native_language: Optional[str]):
+    nl = native_language or ""
+    return f"dict:{target_language}:{nl}:{term.lower()}"
 
 
 if _redis:
