@@ -209,21 +209,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     setIsDeepLoading(true);
     try {
       // Assuming aiService.analyzeText returns the structure you need
-      // You might need to adjust parameters based on your backend definition
-      const response = await aiService.analyzeText(text, targetLanguage);
+      const res: any = await aiService.analyzeText(text, targetLanguage);
+      // aiService.analyzeText is an axios wrapper that returns response.data via interceptor
+      const deep = res as any;
 
       // Merge new deep analysis into existing analysis result
-      // This logic depends on what your backend returns.
-      // Example:
-      setAnalysisResult((prev) =>
-        prev ? { ...prev, ...response.data } : response.data,
-      );
+      setAnalysisResult((prev) => (prev ? { ...prev, ...deep } : deep));
     } catch (error) {
       console.error("Deep analysis failed", error);
+      setError?.("Deep analysis failed");
     } finally {
       setIsDeepLoading(false);
     }
   };
+
+  // When selection changes we should attempt a quick dictionary lookup via backend cache
+  useEffect(() => {
+    if (!selection) return;
+    let cancelled = false;
+
+    const doLookup = async () => {
+      setIsLoadingAnalysis(true);
+      try {
+        const res: any = await aiService.lookup(selection.text, targetLanguage, uiLanguage).catch(() => null);
+        if (!res) {
+          // no result, clear or keep previous
+          if (!cancelled) setAnalysisResult(null);
+          return;
+        }
+
+        const mapped = {
+          translation: res.entry?.translation || "",
+          partOfSpeech: res.entry?.part_of_speech || undefined,
+          literalTranslation: undefined,
+          grammaticalBreakdown: undefined,
+          wordBreakdown: undefined,
+        } as any;
+
+        if (!cancelled) setAnalysisResult(mapped);
+      } catch (e) {
+        console.error("Lookup failed", e);
+        if (!cancelled) setAnalysisResult(null);
+      } finally {
+        if (!cancelled) setIsLoadingAnalysis(false);
+      }
+    };
+
+    doLookup();
+    return () => {
+      cancelled = true;
+    };
+  }, [selection, targetLanguage, uiLanguage]);
+
 
   // Initial Load
   useEffect(() => {
