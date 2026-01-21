@@ -1,14 +1,87 @@
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
 from ..services.database import get_db
-from .. import models
+from .. import models, schemas
 
 router = APIRouter(prefix="/vocab", tags=["vocab"])
 
 
-@router.post("/capture")
-def capture_vocab(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
+@router.post("/capture", response_model=schemas.VocabCaptureResponse)
+def capture_vocab(payload: schemas.VocabCaptureRequest, db: Session = Depends(get_db)):
+    """
+    Capture a word from the reader with its context sentence and optional reading_content reference.
+    Validated via Pydantic `VocabCaptureRequest`.
+    """
+    term = payload.term
+    if not term:
+        raise HTTPException(status_code=400, detail="term is required")
+
+    deck_id = payload.deck_id or 1
+    context_sentence = payload.context
+    reading_content_id = payload.reading_content_id
+    analysis = payload.analysis or {}
+    translation = analysis.get("translation") if isinstance(analysis, dict) else None
+    part_of_speech = (
+        analysis.get("partOfSpeech") if isinstance(analysis, dict) else None
+    )
+    literal_translation = (
+        analysis.get("literalTranslation") if isinstance(analysis, dict) else None
+    )
+
+    existing = (
+        db.query(models.Word)
+        .filter(models.Word.term == term, models.Word.deck_id == deck_id)
+        .first()
+    )
+
+    if existing:
+        existing.encounters = (existing.encounters or 0) + 1
+        if existing.status == "new":
+            existing.status = "seen"
+        if translation:
+            existing.translation = existing.translation or translation
+        if part_of_speech:
+            existing.part_of_speech = existing.part_of_speech or part_of_speech
+
+        if context_sentence:
+            wc = models.WordContext(
+                word_id=existing.id,
+                reading_content_id=reading_content_id,
+                sentence=context_sentence,
+            )
+            db.add(wc)
+
+        db.commit()
+        db.refresh(existing)
+        return {"action": "updated", "word": existing}
+
+    new_word = models.Word(
+        deck_id=deck_id,
+        term=term,
+        context=context_sentence or "",
+        translation=translation,
+        part_of_speech=part_of_speech,
+        literal_translation=literal_translation,
+        reading_content_id=reading_content_id,
+        encounters=1,
+        status="seen",
+    )
+    db.add(new_word)
+    db.commit()
+    db.refresh(new_word)
+
+    if context_sentence:
+        wc = models.WordContext(
+            word_id=new_word.id,
+            reading_content_id=reading_content_id,
+            sentence=context_sentence,
+        )
+        db.add(wc)
+        db.commit()
+
+    db.refresh(new_word)
+    return {"action": "created", "word": new_word}
     """
     Capture a word from the reader with its context sentence and optional reading_content reference.
     Payload flexible to accept camelCase from frontend.

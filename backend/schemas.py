@@ -185,3 +185,38 @@ class ChatResponse(BaseModel):
     tts_base64: Optional[str] = (
         None  # Base64-encoded audio (mp3) of the assistant reply
     )
+
+
+# --- Vocab Capture Schema ---
+class VocabCaptureRequest(BaseModel):
+    term: str
+    deck_id: Optional[int] = 1
+    context: Optional[str] = None
+    reading_content_id: Optional[int] = None
+    analysis: Optional[dict] = None
+
+
+class VocabCaptureResponse(BaseModel):
+    action: str
+    # Use WordRead for returned word payload when possible
+    word: Optional[WordRead] = None
+
+    class Config:
+        orm_mode = True
+
+
+# --- Dictionary Lookup Schema ---
+class DictionaryEntry(BaseModel):
+    term: str
+    translation: Optional[str] = None
+    part_of_speech: Optional[str] = None
+    source: Optional[str] = None
+
+
+class DictionaryLookupResponse(BaseModel):
+    text: str
+    type: str
+    target_language: str
+    native_language: Optional[str] = None
+    entry: Optional[DictionaryEntry] = None
+    raw: Optional[dict] = None
