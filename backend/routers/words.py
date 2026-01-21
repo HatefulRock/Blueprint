@@ -84,6 +84,16 @@ def create_card_from_word(
 
 
 @router.post("/cards/from_deck/{deck_id}", response_model=List[schemas.CardRead])
+def enqueue_generate_deck_cards(
+    deck_id: int, template_id: int | None = None, db: Session = Depends(get_db)
+):
+    """Enqueue an asynchronous job to generate cards for a deck."""
+    from ..workers.card_generator import enqueue_generate_cards_for_deck
+
+    job_id = enqueue_generate_cards_for_deck(deck_id, template_id)
+    return {"job_id": job_id}
+
+
 def bulk_create_cards_from_deck(
     deck_id: int, template_id: int | None = None, db: Session = Depends(get_db)
 ):
