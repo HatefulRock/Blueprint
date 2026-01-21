@@ -53,7 +53,7 @@ export const ViewRenderer: React.FC = () => {
   };
 
   // Helper: Save word from Reader
-  const handleSaveWordFromReader = (wordData: any) => {
+  const handleSaveWordFromReader = async (wordData: any) => {
     if (!activeReadingText) return;
 
     // Ensure we have context. If not provided, find it in the text.
@@ -61,10 +61,38 @@ export const ViewRenderer: React.FC = () => {
       wordData.context ||
       findContextSentence(activeReadingText.content, wordData.term);
 
-    addWord({
-      ...wordData,
+    // Prepare payload for /vocab/capture (backwards-compatible with older POST /words)
+    const payload = {
+      term: wordData.term,
+      deck_id: wordData.deck_id || wordData.deckId || 1,
       context: context,
-    });
+      reading_content_id: activeReadingText.id || undefined,
+      analysis: wordData.analysis || undefined,
+    };
+
+    try {
+      // Try new endpoint first
+      await fetch(`/vocab/capture`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      // Fallback to legacy endpoint
+      try {
+        await fetch(`/words`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...payload, deck_id: payload.deck_id }),
+        });
+      } catch (err) {
+        console.error('Failed to save word to server', err);
+        // Also update locally via Context action if needed
+      }
+    }
+
+    // Refresh local word bank
+    await (addWord as any)( { ...wordData, context } );
   };
 
   // Helper: Handle selection within the Reading Session
