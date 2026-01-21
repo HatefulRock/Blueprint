@@ -83,12 +83,33 @@ const ReviewStatus = ({ dateStr }: { dateStr?: string }) => {
 
 export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: VocabularyViewProps) => {
   const [expandedTerm, setExpandedTerm] = useState<string | null>(null);
+  const [selectedWordId, setSelectedWordId] = useState<number | null>(null);
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
+  const [wordDetail, setWordDetail] = useState<any | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('term');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   const handleToggleExpand = (term: string) => {
       setExpandedTerm(prev => prev === term ? null : term);
+  }
+
+  const openDetailDrawer = async (wordId: number) => {
+      setSelectedWordId(wordId);
+      setDetailDrawerOpen(true);
+      try {
+          const res: any = await (await import('../services/vocabService')).vocabService.getWordDetail(wordId);
+          setWordDetail(res);
+      } catch (e) {
+          console.error('Failed to load word detail', e);
+          setWordDetail(null);
+      }
+  }
+
+  const closeDetailDrawer = () => {
+      setSelectedWordId(null);
+      setDetailDrawerOpen(false);
+      setWordDetail(null);
   }
 
   const handleSort = (key: SortKey) => {
@@ -211,28 +232,38 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
                             </ActionButton>
                         </div>
                     </td>
-                    <td className="p-4 text-center">
-                      <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${expandedTerm === word.term ? 'rotate-180' : ''}`} />
-                    </td>
-                  </tr>
-                  {expandedTerm === word.term && (
-                    <tr className="bg-slate-900/50">
-                      <td colSpan={6} className="p-0">
-                        <div className="p-6 flex flex-col md:flex-row gap-6">
-                          <div className="space-y-4 flex-grow">
-                            <h3 className="text-md font-bold text-white">Analysis Details</h3>
-                            <AnalysisSection title="Translation" content={word.analysis.translation} />
-                            <AnalysisSection title="Literal Translation" content={word.analysis.literalTranslation} />
-                            <AnalysisSection title="Grammatical Breakdown" content={word.analysis.grammaticalBreakdown} />
-                            <div className="md:hidden mt-4">
-                                <h3 className="text-sm font-semibold text-sky-400 mb-1">Context</h3>
-                                <p className="text-slate-300 text-sm italic">"{word.context}"</p>
-                            </div>
-                          </div>
+                      <td className="p-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button onClick={(e) => { e.stopPropagation(); openDetailDrawer((word as any).id || 0); }} className="px-3 py-1 bg-slate-700 rounded-md text-slate-300 hover:bg-sky-600">Details</button>
+                          <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${expandedTerm === word.term ? 'rotate-180' : ''}`} />
                         </div>
                       </td>
-                    </tr>
-                  )}
+                  </tr>
+                   {expandedTerm === word.term && (
+                     <tr className="bg-slate-900/50">
+                       <td colSpan={6} className="p-0">
+                         <div className="p-6 flex flex-col md:flex-row gap-6">
+                           <div className="space-y-4 flex-grow">
+                             <h3 className="text-md font-bold text-white">Analysis Details</h3>
+                             <AnalysisSection title="Translation" content={word.analysis.translation} />
+                             <AnalysisSection title="Literal Translation" content={word.analysis.literalTranslation} />
+                             <AnalysisSection title="Grammatical Breakdown" content={word.analysis.grammaticalBreakdown} />
+                             <div className="md:hidden mt-4">
+                                 <h3 className="text-sm font-semibold text-sky-400 mb-1">Context</h3>
+                                 <p className="text-slate-300 text-sm italic">"{word.context}"</p>
+                             </div>
+                           </div>
+                           <div className="w-80">
+                             <h4 className="text-sm font-semibold text-sky-400 mb-2">Actions</h4>
+                             <div className="flex flex-col gap-2">
+                                 <button onClick={(e) => { e.stopPropagation(); (async () => { const vs = await import('../services/vocabService'); const resp = await vs.vocabService.bulkCreateCards([(word as any).id]); alert(`Created ${resp?.length || 0} cards`); })(); }} className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md">Create Card</button>
+                                 <button onClick={(e) => { e.stopPropagation(); (async () => { const vs = await import('../services/vocabService'); await vs.vocabService.invalidateWordCache((word as any).id); alert('Cache invalidated'); })(); }} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md">Invalidate Cache</button>
+                             </div>
+                           </div>
+                         </div>
+                       </td>
+                     </tr>
+                   )}
                 </React.Fragment>
               ))}
             </tbody>
