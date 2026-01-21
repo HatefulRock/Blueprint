@@ -61,6 +61,17 @@ class WordRead(WordBase):
         orm_mode = True
 
 
+class WordContextRead(BaseModel):
+    id: int
+    word_id: int
+    reading_content_id: Optional[int] = None
+    sentence: str
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
 class ContentBase(BaseModel):
     title: str
     content: str
