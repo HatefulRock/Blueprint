@@ -16,9 +16,21 @@ const getAI = () => {
 };
 
 export const getDictionaryLookup = async (selection: Selection, { targetLanguage, nativeLanguage }: LanguageParams): Promise<AnalysisResult> => {
-  const ai = getAI();
-  
-  const prompt = `
+  // Prefer backend cached lookup when available
+  try {
+    const res: any = await fetch(`/dictionary/lookup?term=${encodeURIComponent(selection.text)}&target_language=${encodeURIComponent(targetLanguage)}&native_language=${encodeURIComponent(nativeLanguage || '')}`);
+    if (!res.ok) throw new Error('Lookup failed');
+    const data = await res.json();
+    // Map to AnalysisResult-like shape for compatibility with components
+    const entry = data.entry || {};
+    return {
+      translation: entry.translation || '',
+      partOfSpeech: entry.part_of_speech || '',
+    } as AnalysisResult;
+  } catch (e) {
+    // Fallback to client-side Gemini call
+    const ai = getAI();
+    const prompt = `
     Provide a dictionary definition for the ${selection.type} "${selection.text}".
     Target Language: ${targetLanguage}
     Output Language (for definitions): ${nativeLanguage}
@@ -28,24 +40,25 @@ export const getDictionaryLookup = async (selection: Selection, { targetLanguage
     - partOfSpeech: The part of speech (e.g., Noun, Verb).
   `;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt,
-    config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-                translation: { type: Type.STRING },
-                partOfSpeech: { type: Type.STRING },
-            },
-            required: ['translation', 'partOfSpeech'],
-        }
-    }
-  });
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                  translation: { type: Type.STRING },
+                  partOfSpeech: { type: Type.STRING },
+              },
+              required: ['translation', 'partOfSpeech'],
+          }
+      }
+    });
 
-  const result = JSON.parse(response.text || "{}");
-  return result as AnalysisResult;
+    const result = JSON.parse(response.text || "{}");
+    return result as AnalysisResult;
+  }
 };
 
 export const getDeepAnalysis = async (selection: Selection, { targetLanguage, nativeLanguage }: LanguageParams): Promise<AnalysisResult> => {
