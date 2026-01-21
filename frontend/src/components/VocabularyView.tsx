@@ -86,6 +86,19 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
   const [selectedWordId, setSelectedWordId] = useState<number | null>(null);
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
   const [wordDetail, setWordDetail] = useState<any | null>(null);
+
+  // Multi-select for bulk operations
+  const [selectedWords, setSelectedWords] = useState<Record<number, boolean>>({});
+
+  const toggleSelectWord = (wordId?: number) => {
+    if (!wordId) return;
+    setSelectedWords(prev => ({ ...prev, [wordId]: !prev[wordId] }));
+  }
+
+  const clearSelection = () => setSelectedWords({});
+
+  const getSelectedWordIds = () => Object.keys(selectedWords).filter(k => selectedWords[Number(k)]).map(k => Number(k));
+
   const [searchTerm, setSearchTerm] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('term');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -156,7 +169,21 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
     <div className="flex-1 p-6 md:p-8">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
         <h2 className="text-3xl font-bold text-white">My Vocabulary</h2>
-        <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-4 flex-wrap"> 
+              <div className="flex items-center gap-2">
+                <button onClick={async () => {
+                  const ids = getSelectedWordIds();
+                  if (ids.length === 0) { alert('No words selected'); return; }
+                  try {
+                    const vs = await import('../services/vocabService');
+                    const resp = await vs.vocabService.bulkCreateCards(ids);
+                    alert(`Created ${resp?.length || 0} cards`);
+                    clearSelection();
+                  } catch (e) { console.error(e); alert('Bulk create failed'); }
+                }} className="px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-md">Bulk Create Cards</button>
+
+                <button onClick={() => { clearSelection(); }} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md">Clear Selection</button>
+              </div>
           <input
             type="text"
             placeholder="Search words..."
@@ -178,6 +205,7 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
           <table className="w-full text-left">
             <thead className="bg-slate-700/50">
               <tr>
+                <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider w-1/4">Select</th>
                 <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider w-1/4">Word</th>
                 <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider hidden md:table-cell w-1/3">Context</th>
                 <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider w-1/6">Review</th>
@@ -189,10 +217,13 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
             <tbody className="divide-y divide-slate-700">
               {filteredAndSortedWords.map((word, index) => (
                 <React.Fragment key={`${word.term}-${index}`}>
-                  <tr 
-                    className="hover:bg-slate-700/30 transition-colors cursor-pointer"
-                    onClick={() => handleToggleExpand(word.term)}
-                  >
+                   <tr 
+                     className="hover:bg-slate-700/30 transition-colors cursor-pointer"
+                     onClick={() => handleToggleExpand(word.term)}
+                   >
+                     <td className="p-4 font-mono text-emerald-300 align-top">
+                       <input type="checkbox" checked={selectedWords[(word as any).id || 0] || false} onChange={(e) => { e.stopPropagation(); toggleSelectWord((word as any).id); }} />
+                     </td>
                     <td className="p-4 font-mono text-emerald-300 align-top">
                         <div className="flex items-center gap-2">
                             {word.term}

@@ -1,5 +1,6 @@
 
 export interface Word {
+  id?: number;
   term: string;
   context: string;
   familiarityScore: number; // 1-5 scale
