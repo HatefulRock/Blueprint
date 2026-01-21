@@ -206,12 +206,21 @@ class VocabCaptureRequest(BaseModel):
     context: Optional[str] = None
     reading_content_id: Optional[int] = None
     analysis: Optional[dict] = None
+    create_card: Optional[bool] = False
 
 
 class VocabCaptureResponse(BaseModel):
     action: str
     # Use WordRead for returned word payload when possible
     word: Optional[WordRead] = None
+
+    class Config:
+        orm_mode = True
+
+
+class VocabWordDetailResponse(BaseModel):
+    word: WordRead
+    contexts: List[WordContextRead] = []
 
     class Config:
         orm_mode = True
