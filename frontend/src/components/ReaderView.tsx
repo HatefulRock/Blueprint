@@ -62,7 +62,7 @@ const ContentLibrary = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {(userArticles || []).map((article) => (
                 <div
-                  key={article.id || Math.random()}
+                  key={(article && ((article as any).id || Math.random()))}
                   className="relative group" // Added relative for positioning delete button
                 >
                 <button
@@ -72,7 +72,7 @@ const ContentLibrary = ({
                   <div className="flex justify-between items-start mb-2 pr-6">
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                        LEVEL_COLORS[article.difficulty_score as string] ||
+                        LEVEL_COLORS[(article as any).difficulty_score as string] ||
                         "bg-slate-700 text-slate-400"
                       }`}
                     >
@@ -80,10 +80,10 @@ const ContentLibrary = ({
                     </span>
                   </div>
                   <div className="font-bold text-white group-hover:text-sky-400 transition-colors">
-                    {article.title}
+                    {(article && (article as any).title) || 'Untitled'}
                   </div>
                   <div className="text-xs text-slate-500 line-clamp-1 mt-1">
-                    {article.content?.substring(0, 100)}...
+                    {(article && (article as any).content ? (article as any).content.substring(0,100) : '')}...
                   </div>
                 </button>
 
@@ -179,7 +179,9 @@ export const ReaderView = ({
     const loadLibrary = async () => {
       try {
         const response = await contentService.getUserContent(1); // User ID 1
-        setUserArticles(response.data ?? []);
+        // contentService may return axios response or already-unwrapped data depending on interceptor
+        const articles = (response && (response.data ?? response)) ?? [];
+        setUserArticles(articles);
       } catch (err) {
         console.error("Failed to load library", err);
         setUserArticles([]);
@@ -207,12 +209,14 @@ export const ReaderView = ({
     setIsFetching(true);
     try {
       const response = await contentService.importUrl(url, 1);
-      const newArticle = response.data;
-      setUserArticles((prev) => [newArticle, ...prev]);
-      onStartReadingSession({
-        title: newArticle.title,
-        content: newArticle.content,
-      });
+      const newArticle = (response && (response.data ?? response)) || null;
+      if (newArticle) {
+        setUserArticles((prev) => [newArticle, ...prev]);
+        onStartReadingSession({
+          title: newArticle.title || newArticle.title || 'Untitled',
+          content: newArticle.content || ''
+        });
+      }
       setUrl("");
     } catch (error) {
       console.error("Scraping failed", error);
