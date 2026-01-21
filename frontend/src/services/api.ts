@@ -175,6 +175,10 @@ export const aiService = {
   // Conversation endpoints
   sendMessage: (payload: any) => api.post(`/conversation/message`, payload),
   sendAudio: (formData: FormData) => api.post(`/conversation/audio`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+
+  // Dictionary lookup via backend cache
+  lookup: (term: string, targetLanguage: string, nativeLanguage?: string) =>
+    api.get(`/dictionary/lookup`, { params: { term, target_language: targetLanguage, native_language: nativeLanguage } }),
 };
 
 export const dashboardService = {
