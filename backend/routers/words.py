@@ -75,6 +75,7 @@ def create_card_from_word(
         template_id=template.id if template else None,
         front=front,
         back=back,
+        word_id=word.id,
     )
     db.add(new_card)
     db.commit()
@@ -131,12 +132,80 @@ def bulk_create_cards_from_deck(
             template_id=template.id if template else None,
             front=front,
             back=back,
+            word_id=w.id,
         )
         db.add(card)
         created.append(card)
 
     db.commit()
     # refresh created cards
+    for c in created:
+        db.refresh(c)
+    return created
+
+
+@router.post("/cards/bulk_from_words", response_model=List[schemas.CardRead])
+def bulk_create_cards_from_word_ids(payload: dict, db: Session = Depends(get_db)):
+    """Create cards for the provided list of word IDs using optional template and deck override.
+
+    payload: { word_ids: [1,2,3], template_id: number|null, deck_id: number|null }
+    """
+    word_ids = payload.get("word_ids") or []
+    template_id = payload.get("template_id")
+    deck_id = payload.get("deck_id")
+
+    if not word_ids:
+        return []
+
+    from jinja2 import Template
+
+    template = None
+    if template_id:
+        template = (
+            db.query(models.CardTemplate)
+            .filter(models.CardTemplate.id == int(template_id))
+            .first()
+        )
+    if not template:
+        template = (
+            db.query(models.CardTemplate)
+            .filter(
+                models.CardTemplate.name == "Basic", models.CardTemplate.user_id == None
+            )
+            .first()
+        )
+
+    created = []
+    for wid in word_ids:
+        w = db.query(models.Word).filter(models.Word.id == int(wid)).first()
+        if not w:
+            continue
+        context = {
+            "term": w.term,
+            "translation": w.translation,
+            "context": w.context,
+            "part_of_speech": w.part_of_speech,
+            "literal_translation": w.literal_translation,
+        }
+        front = (
+            Template(template.front_template).render(**context) if template else w.term
+        )
+        back = (
+            Template(template.back_template).render(**context)
+            if template
+            else (w.translation or "")
+        )
+        card = models.Card(
+            deck_id=deck_id or w.deck_id,
+            template_id=template.id if template else None,
+            front=front,
+            back=back,
+            word_id=w.id,
+        )
+        db.add(card)
+        created.append(card)
+
+    db.commit()
     for c in created:
         db.refresh(c)
     return created

@@ -155,6 +155,11 @@ export const wordService = {
     const res = await api.post(`/words/cards/from_deck/${deckId}`, { template_id: templateId });
     return res as any;
   },
+  // New utility to bulk-create cards from a list of word IDs (server will link word_id)
+  bulkCreateFromWordIds: async (wordIds: number[], templateId?: number, deckId?: number) => {
+    const res = await api.post(`/words/cards/bulk_from_words`, { word_ids: wordIds, template_id: templateId, deck_id: deckId });
+    return res as any;
+  },
   getTemplates: async (userId: number) => {
     const res = await api.get(`/words/templates/${userId}`);
     return res as any;
