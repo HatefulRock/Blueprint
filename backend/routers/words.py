@@ -294,6 +294,26 @@ def review_card(
 
     db.commit()
     db.refresh(card)
+
+    # If this card links to a word, update the word's SRS / familiarity in parallel
+    try:
+        if card.word_id:
+            w = db.query(models.Word).filter(models.Word.id == card.word_id).first()
+            if w:
+                # simple mapping: quality >=3 increments familiarity, else decrements
+                if q >= 3:
+                    w.familiarity_score = (w.familiarity_score or 0) + 1
+                else:
+                    w.familiarity_score = max(0, (w.familiarity_score or 0) - 1)
+                w.last_reviewed_date = datetime.utcnow()
+                # set next_review_date based on familiarity scoring (simple multiplier)
+                days = max(1, (w.familiarity_score or 0) * 2)
+                w.next_review_date = datetime.utcnow() + timedelta(days=days)
+                db.add(w)
+                db.commit()
+    except Exception:
+        pass
+
     return card
 
 
