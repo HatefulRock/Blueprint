@@ -1,1 +1,2 @@
 from . import users, words, content, ai, conversation, practice, leaderboard
+from . import vocab  # new vocab capture endpoint
