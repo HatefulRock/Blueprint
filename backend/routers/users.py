@@ -33,6 +33,15 @@ def get_user_stats(user_id: int, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    # Ensure numeric fields are not None to satisfy response schema
+    if getattr(user, "new_words_this_week", None) is None:
+        user.new_words_this_week = 0
+    if getattr(user, "practice_sessions_this_week", None) is None:
+        user.practice_sessions_this_week = 0
+    if getattr(user, "points", None) is None:
+        user.points = 0
+    if getattr(user, "streak", None) is None:
+        user.streak = 0
     return user
 
 

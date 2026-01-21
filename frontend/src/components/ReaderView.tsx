@@ -36,7 +36,7 @@ const ContentLibrary = ({
   targetLanguage: string;
   userArticles: any[];
 }) => {
-  const contentForLanguage = CURATED_CONTENT.filter(
+  const contentForLanguage = (CURATED_CONTENT || []).filter(
     (c) => c.language === targetLanguage,
   );
 
@@ -54,17 +54,17 @@ const ContentLibrary = ({
   return (
     <div className="space-y-10">
       {/* SECTION 1: PERSONAL COLLECTION */}
-      {userArticles.length > 0 && (
-        <div>
-          <h4 className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-4 ml-1">
-            Your Imports
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {userArticles.map((article) => (
-              <div
-                key={article.id || Math.random()}
-                className="relative group" // Added relative for positioning delete button
-              >
+      {(userArticles?.length ?? 0) > 0 && (
+          <div>
+            <h4 className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-4 ml-1">
+              Your Imports
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {(userArticles || []).map((article) => (
+                <div
+                  key={article.id || Math.random()}
+                  className="relative group" // Added relative for positioning delete button
+                >
                 <button
                   onClick={() => onSelectCuratedText(article)}
                   className="w-full bg-slate-800/40 border border-slate-700/50 p-4 rounded-xl text-left hover:bg-slate-700/50 transition-all"
@@ -179,9 +179,10 @@ export const ReaderView = ({
     const loadLibrary = async () => {
       try {
         const response = await contentService.getUserContent(1); // User ID 1
-        setUserArticles(response.data);
+        setUserArticles(response.data ?? []);
       } catch (err) {
         console.error("Failed to load library", err);
+        setUserArticles([]);
       }
     };
     loadLibrary();

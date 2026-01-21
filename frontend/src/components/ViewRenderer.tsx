@@ -5,18 +5,15 @@ import { findContextSentence } from "../utils";
 
 // Components
 import { DashboardView } from "./DashboardView";
-import { ReaderView } from "./ReaderView";
 import { ReadingSessionView } from "./ReadingSessionView";
-import { VocabularyView } from "./VocabularyView";
 import { FlashcardView } from "./FlashcardView";
 import { PracticeView } from "./PracticeView";
 import { VocabularyView } from "./VocabularyView";
 import { ReaderView } from "./ReaderView";
-import { DashboardView } from "./DashboardView";
-import { ProfileView } from "./ProfileView";
+//import { ProfileView } from "./ProfileView";
 import { ConversationView } from "./ConversationView";
 import { AnalyticsView } from "./AnalyticsView";
-
+import { SettingsPage } from "./SettingsPage";
 
 export const ViewRenderer: React.FC = () => {
   const {
@@ -42,7 +39,6 @@ export const ViewRenderer: React.FC = () => {
 
     // Actions
     addWord,
-    handleRequestAnalysis, // Assuming you have a basic analysis handler
     handleRequestDeepAnalysis,
     handlePlayAudio,
   } = useApp();
@@ -74,9 +70,20 @@ export const ViewRenderer: React.FC = () => {
   // Helper: Handle selection within the Reading Session
   const handleTextSelect = (newSelection: Selection) => {
     setSelection(newSelection);
-    // Optional: Trigger basic analysis immediately on selection
-    if (handleRequestAnalysis) {
-      handleRequestAnalysis(newSelection.text);
+    // No-op for basic analysis here; deep analysis requires context and is triggered from the panel.
+  };
+
+  // Wrapper to adapt Context deep-analysis action (expects text + context)
+  const requestDeepAnalysis = async () => {
+    if (!selection) return;
+    const context =
+      selection.type === "word"
+        ? findContextSentence(activeReadingText?.content ?? "", selection.text)
+        : selection.text;
+    try {
+      await handleRequestDeepAnalysis(selection.text, context);
+    } catch (e) {
+      console.error("Deep analysis request failed", e);
     }
   };
 
@@ -84,7 +91,7 @@ export const ViewRenderer: React.FC = () => {
     case View.Dashboard:
       return (
         <DashboardView
-          wordCount={wordBank.length}
+          wordCount={wordBank?.length ?? 0}
           setCurrentView={setCurrentView}
           onStartReadingSession={handleStartReadingSession}
           goals={goals}
@@ -131,14 +138,14 @@ export const ViewRenderer: React.FC = () => {
           }}
           onTextSelect={handleTextSelect} // FIXED: Passed the handler
           onSaveWord={handleSaveWordFromReader}
-          onRequestDeepAnalysis={handleRequestDeepAnalysis}
+           onRequestDeepAnalysis={requestDeepAnalysis}
           onPlayAudio={handlePlayAudio}
           isPopupOpen={!!selection} // Simple state derivation or pass explicit state
           setIsPopupOpen={(isOpen) => !isOpen && setSelection(null)}
           onFirstHighlight={() => {}}
-          isWordInBank={wordBank.some(
-            (w) => w.term.toLowerCase() === selection?.text.toLowerCase(),
-          )}
+           isWordInBank={wordBank?.some(
+             (w) => w.term.toLowerCase() === selection?.text.toLowerCase(),
+           ) ?? false}
         />
       );
 
@@ -175,6 +182,9 @@ export const ViewRenderer: React.FC = () => {
 
     case View.Conversation:
       return <ConversationView targetLanguage={targetLanguage} />;
+
+    case View.Settings:
+      return <SettingsPage />;
 
     default:
       return <div>View Not Found</div>;

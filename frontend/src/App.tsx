@@ -3,6 +3,7 @@ import { AppProvider, useApp } from "./context/AppContext";
 import { Header } from "./components/Header";
 import { ViewRenderer } from "./components/ViewRenderer";
 import { ErrorToast } from "./components/ErrorToast";
+import { AuthEntry } from "./components/AuthEntry";
 // import { GoalSettingModal } from "./components/GoalSettingModal";
 import { View } from "./types";
 
@@ -19,10 +20,15 @@ const AppContent = () => {
     setTargetLanguage,
     uiLanguage,
     setUiLanguage,
+    // custom languages from settings
+    customTargetLanguages,
+    addCustomTargetLanguage,
+    removeCustomTargetLanguage,
     // 1. ADD THESE FROM CONTEXT
     error,
     setError,
   } = useApp();
+
 
   if (isLoading) {
     return (
@@ -32,22 +38,24 @@ const AppContent = () => {
     );
   }
 
+  const builtInTargetLanguages = [
+    { code: "Chinese", name: "Chinese" },
+    { code: "Spanish", name: "Spanish" },
+    { code: "French", name: "French" },
+  ];
+
   const supportedLanguages = {
-    target: [
-      { code: "Chinese", name: "Chinese" },
-      { code: "Spanish", name: "Spanish" },
-      { code: "French", name: "French" },
-    ],
+    target: [...builtInTargetLanguages, ...(customTargetLanguages || [])],
     ui: [{ code: "English", name: "English" }],
   };
 
   return (
     <div className="min-h-screen bg-slate-900">
       {currentView !== View.ReadingSession && (
-        <Header
+          <Header
           currentView={currentView}
           setCurrentView={setCurrentView}
-          wordCount={wordBank.length}
+          wordCount={wordBank?.length ?? 0}
           displayMode={analysisDisplayMode}
           onDisplayModeChange={setAnalysisDisplayMode}
           supportedLanguages={supportedLanguages}
@@ -68,6 +76,9 @@ const AppContent = () => {
 
       {/* 2. ONLY RENDER IF ERROR EXISTS */}
       {error && <ErrorToast message={error} onClose={() => setError(null)} />}
+
+      {/* Auth Modal entry point */}
+      <AuthEntry />
     </div>
   );
 };

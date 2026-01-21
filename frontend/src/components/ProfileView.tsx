@@ -49,7 +49,7 @@ export const ProfileView = ({ points, streak, unlockedAchievements, goals, goalP
   return (
     <div className="flex-1 p-6 md:p-8">
       <h2 className="text-3xl font-bold text-white mb-8">My Progress</h2>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           <StatCard label="Total Points" value={points} icon="✨" />
           <StatCard label="Current Streak" value={`${streak} days`} icon="🔥" />

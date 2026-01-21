@@ -17,7 +17,7 @@ import { CURATED_CONTENT } from "../data/curatedContent"; // Ensure this file ex
 interface DashboardViewProps {
   wordCount: number;
   setCurrentView: (view: View) => void;
-  onStartReadingSession: (title: string, content: string) => void;
+  onStartReadingSession: (textData: ActiveReadingText) => void;
   goals: Goals | null;
   goalProgress: GoalProgress | null;
   uiStrings: {
@@ -129,7 +129,8 @@ export const DashboardView = ({
     const loadDashboard = async () => {
       try {
         const response = await dashboardService.getDashboard(1);
-        setData(response.data);
+        // api interceptor already returns response.data, so `response` is the payload
+        setData(response);
       } catch (err) {
         console.error(err);
         setError("Could not connect to the server.");
@@ -189,7 +190,19 @@ export const DashboardView = ({
   }
 
   // 3. Safe Destructuring (Only happens if data exists)
-  const { user, studyPlan } = data;
+  const user = data?.user ?? { username: 'User', points: 0, streak: 0 };
+  const rawStudyPlan = data?.studyPlan ?? { summary: '', tasks: [] };
+  // Ensure the summary uses numeric fallbacks so it never contains 'None' or 'null'
+  const studyPlan = {
+    ...rawStudyPlan,
+    summary:
+      rawStudyPlan.summary && rawStudyPlan.summary.trim().length > 0
+        ? rawStudyPlan.summary.replace(/\b(None|null)\b/gi, String(data?.progress?.newWordsThisWeek ?? 0))
+        : `You're doing great! You've learned ${data?.progress?.newWordsThisWeek ?? 0} words this week.`,
+    tasks: rawStudyPlan.tasks ?? [],
+  };
+
+  const progressData = data?.progress ?? { newWordsThisWeek: 0, practiceSessionsThisWeek: 0, wordsGoal: 20, sessionsGoal: 3 };
 
   return (
     <div className="flex-1 p-6 md:p-8 overflow-y-auto pb-24">
@@ -225,18 +238,18 @@ export const DashboardView = ({
               This Week's Progress
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <GoalProgressCard
-                label="New Words"
-                current={goalProgress?.newWordsThisWeek || 0}
-                goal={goals?.wordsPerWeek || 20}
-                icon={<BookOpenIcon className="w-6 h-6 text-slate-500" />}
-              />
-              <GoalProgressCard
-                label="Practice Sessions"
-                current={goalProgress?.practiceSessionsThisWeek || 0}
-                goal={goals?.practiceSessionsPerWeek || 3}
-                icon={<PencilSquareIcon className="w-6 h-6 text-slate-500" />}
-              />
+               <GoalProgressCard
+                 label="New Words"
+                 current={progressData?.newWordsThisWeek ?? 0}
+                 goal={progressData?.wordsGoal ?? goals?.wordsPerWeek ?? 20}
+                 icon={<BookOpenIcon className="w-6 h-6 text-slate-500" />}
+               />
+               <GoalProgressCard
+                 label="Practice Sessions"
+                 current={progressData?.practiceSessionsThisWeek ?? 0}
+                 goal={progressData?.sessionsGoal ?? goals?.practiceSessionsPerWeek ?? 3}
+                 icon={<PencilSquareIcon className="w-6 h-6 text-slate-500" />}
+               />
             </div>
           </div>
 
@@ -273,20 +286,19 @@ export const DashboardView = ({
               <span className="text-2xl">✨</span>
               <h3 className="text-xl font-bold text-white">Daily Plan</h3>
             </div>
-            {studyPlan ? (
+            {studyPlan && studyPlan.summary ? (
               <>
                 <p className="text-sm text-slate-400 mb-6 italic">
-                  "{studyPlan.summary}"
+                  {studyPlan.summary}
                 </p>
                 <div className="space-y-3">
-                  {studyPlan.tasks &&
-                    studyPlan.tasks.map((task: any, index: number) => (
-                      <TaskCard
-                        key={task.id || index}
-                        task={task}
-                        onStartTask={handleStartTask}
-                      />
-                    ))}
+                  {(studyPlan.tasks || []).map((task: any, index: number) => (
+                    <TaskCard
+                      key={task.id || index}
+                      task={task}
+                      onStartTask={handleStartTask}
+                    />
+                  ))}
                 </div>
               </>
             ) : (

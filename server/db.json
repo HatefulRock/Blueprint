@@ -1,0 +1,11 @@
+{
+  "users": {
+    "1": {
+      "settings": {
+        "targetLanguage": "Chinese",
+        "customTargetLanguages": [],
+        "readerSettings": {}
+      }
+    }
+  }
+}

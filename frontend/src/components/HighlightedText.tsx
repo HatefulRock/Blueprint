@@ -66,9 +66,9 @@ export const HighlightedText = ({
 
             {/* Tooltip */}
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max px-3 py-2 bg-slate-800 border border-slate-600 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-30 shadow-xl">
-              <div className="font-bold text-sky-400">
-                {wordData.translation}
-              </div>
+               <div className="font-bold text-sky-400">
+                 {wordData.analysis?.translation ?? '—'}
+               </div>
               <div className="text-slate-400 mt-1">
                 Mastery: {wordData.familiarityScore}/5
               </div>

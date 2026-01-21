@@ -1,3 +1,13 @@
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from backend import models
+
+from ..services.database import get_db
+
+router = APIRouter()
+
+
 @router.get("/session/{session_id}")
 def get_conversation_session(session_id: int, db: Session = Depends(get_db)):
     """Return conversation messages for a session id in chronological order."""

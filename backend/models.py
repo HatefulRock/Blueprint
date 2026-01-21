@@ -1,6 +1,8 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Date, DateTime, Text, ForeignKey, Float
+
+from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
+
 from backend.services.database import (
     Base,
 )  # Ensure this import points to your actual database.py file
@@ -82,6 +84,9 @@ class Card(Base):
     deck_id = Column(Integer, ForeignKey("decks.id"), nullable=False)
     template_id = Column(Integer, ForeignKey("card_templates.id"), nullable=True)
 
+    # Link back to originating Word (optional)
+    word_id = Column(Integer, ForeignKey("words.id"), nullable=True)
+
     front = Column(Text, nullable=False)
     back = Column(Text, nullable=False)
 
@@ -110,12 +115,36 @@ class Word(Base):
     grammatical_breakdown = Column(Text)  # Storing JSON as text for simplicity
     literal_translation = Column(String(200))
 
+    # Optional link to the ReadingContent this word was found in
+    reading_content_id = Column(
+        Integer, ForeignKey("reading_content.id"), nullable=True
+    )
+
+    # Encounters count and lightweight status for phased rollout
+    encounters = Column(Integer, default=0)
+    status = Column(String(30), default="new")
+
+    # Relationship to store multiple contexts/sentences for the same word
+    contexts = relationship("WordContext", backref="word", cascade="all, delete-orphan")
+
     # Spaced Repetition (SRS) Data
     familiarity_score = Column(Integer, default=0)
     easiness_factor = Column(Float, default=2.5)
     interval = Column(Integer, default=0)
     next_review_date = Column(DateTime, default=datetime.utcnow)
     last_reviewed_date = Column(DateTime, nullable=True)
+
+
+class WordContext(Base):
+    __tablename__ = "word_contexts"
+
+    id = Column(Integer, primary_key=True)
+    word_id = Column(Integer, ForeignKey("words.id"), nullable=False)
+    reading_content_id = Column(
+        Integer, ForeignKey("reading_content.id"), nullable=True
+    )
+    sentence = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class ReadingContent(Base):

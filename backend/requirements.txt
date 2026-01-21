@@ -7,3 +7,5 @@ google-genai==1.29.1
 httpx==0.24.1
 beautifulsoup4==4.12.2
 pypdf==3.17.0
+gtts
+pypdf

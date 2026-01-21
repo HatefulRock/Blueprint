@@ -1,8 +1,8 @@
+import datetime
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Body
+from fastapi import APIRouter, Body, Depends
 from sqlalchemy.orm import Session
-import datetime
 
 from .. import models
 from ..models import Word
@@ -46,9 +46,6 @@ def create_study_session(payload: dict = Body(...), db: Session = Depends(get_db
     payload: {deck_id: int|null, user_id: int, limit: int}
     Returns list of Card objects ready for review ordered by priority.
     """
-from sqlalchemy import asc
-from datetime import datetime
-
 
     deck_id = payload.get("deck_id")
     user_id = payload.get("user_id")
@@ -109,7 +106,9 @@ from datetime import datetime
 
     # Create a PracticeSession record for analytics
     try:
-        session = models.PracticeSession(user_id=int(user_id) if user_id else 0, session_type="flashcards", score=0)
+        session = models.PracticeSession(
+            user_id=int(user_id) if user_id else 0, session_type="flashcards", score=0
+        )
         db.add(session)
         db.commit()
         db.refresh(session)
@@ -120,8 +119,10 @@ from datetime import datetime
     return {"cards": out, "session_id": session_id}
 
 
-@router.get('/sessions')
-def list_practice_sessions(user_id: int, limit: int = 20, db: Session = Depends(get_db)):
+@router.get("/sessions")
+def list_practice_sessions(
+    user_id: int, limit: int = 20, db: Session = Depends(get_db)
+):
     """Return recent practice sessions for a user."""
     sessions = (
         db.query(models.PracticeSession)
@@ -133,12 +134,12 @@ def list_practice_sessions(user_id: int, limit: int = 20, db: Session = Depends(
 
     out = [
         {
-            'id': s.id,
-            'user_id': s.user_id,
-            'session_type': s.session_type,
-            'score': s.score,
-            'timestamp': s.timestamp.isoformat() if s.timestamp else None,
+            "id": s.id,
+            "user_id": s.user_id,
+            "session_type": s.session_type,
+            "score": s.score,
+            "timestamp": s.timestamp.isoformat() if s.timestamp else None,
         }
         for s in sessions
     ]
-    return {'sessions': out}
+    return {"sessions": out}

@@ -36,6 +36,11 @@ class WordBase(BaseModel):
     literal_translation: Optional[str] = None
     deck_id: int
 
+    # New fields for phased rollout
+    reading_content_id: Optional[int] = None
+    encounters: Optional[int] = 0
+    status: Optional[str] = "new"
+
 
 class WordCreate(WordBase):
     pass
@@ -135,6 +140,7 @@ class DeckRead(BaseModel):
 
 class CardReviewRequest(BaseModel):
     rating: int  # 0-5 quality rating as SM-2 (0 worst, 5 perfect)
+    session_id: Optional[int] = None
 
 
 class AnalysisRequest(BaseModel):

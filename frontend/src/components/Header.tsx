@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import { View, AnalysisDisplayMode, LanguageOption } from '../types';
 import { BookOpenIcon } from './icons/BookOpenIcon';
 import { CollectionIcon } from './icons/CollectionIcon';
@@ -44,18 +44,12 @@ export const Header = ({
     currentView, setCurrentView, wordCount, /*points, streak,*/ displayMode, onDisplayModeChange, 
     supportedLanguages, targetLanguage, uiLanguage, onTargetLanguageChange, onUiLanguageChange 
 }: HeaderProps) => {
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const settingsRef = useRef<HTMLDivElement>(null);
+  // Settings navigation — open full Settings view
+  const openSettings = () => setCurrentView(View.Settings);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-        if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
-            setIsSettingsOpen(false);
-        }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  // Build language list combining defaults + custom ones from parent (from App)
+  // The header receives supportedLanguages prop; App will include customTargetLanguages there.
+  const targetLangOptions = supportedLanguages.target;
 
   return (
     <header className="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700 p-4 flex justify-between items-center sticky top-0 z-20">
@@ -104,6 +98,9 @@ export const Header = ({
                 </select>
             </div>
             <div>
+                <button onClick={() => setCurrentView(View.Settings)} className="ml-2 text-xs px-2 py-1 bg-slate-700 rounded text-slate-200">Settings</button>
+            </div>
+            <div>
                 <label htmlFor="ui-lang-header" className="text-xs text-slate-400 mr-2">UI:</label>
                 <select 
                     id="ui-lang-header" 
@@ -123,22 +120,10 @@ export const Header = ({
           <span className="text-slate-400">Words</span>
         </div>
         
-        <div className="relative" ref={settingsRef}>
-            <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} className="p-2 rounded-full text-slate-300 hover:bg-slate-700 hover:text-white transition-colors">
+        <div>
+            <button onClick={openSettings} className="p-2 rounded-full text-slate-300 hover:bg-slate-700 hover:text-white transition-colors">
                 <AdjustmentsHorizontalIcon className="w-5 h-5" />
             </button>
-            {isSettingsOpen && (
-                <div className="absolute top-full right-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-lg shadow-lg p-2">
-                    <div className="p-2">
-                        <p className="text-xs font-semibold text-slate-400 uppercase px-2 py-1">Reader Settings</p>
-                        <div className="text-sm text-slate-300 px-2 py-2">Analysis Display</div>
-                        <div className="flex flex-col gap-1 p-1">
-                            <button onClick={() => { onDisplayModeChange('panel'); setIsSettingsOpen(false); }} className={`w-full text-left px-3 py-1.5 text-sm rounded-md ${displayMode === 'panel' ? 'bg-sky-600 text-white' : 'hover:bg-slate-700'}`}>Side Panel</button>
-                            <button onClick={() => { onDisplayModeChange('popup'); setIsSettingsOpen(false); }} className={`w-full text-left px-3 py-1.5 text-sm rounded-md ${displayMode === 'popup' ? 'bg-sky-600 text-white' : 'hover:bg-slate-700'}`}>Popup</button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
       </div>
     </header>

@@ -53,6 +53,7 @@ export enum View {
   Practice = 'practice',
   // Leaderboard = 'leaderboard',
   ReadingSession = 'reading_session',
+  Settings = 'settings',
   // Profile = 'profile',
 }
 
@@ -75,7 +76,7 @@ export interface PronunciationFeedback {
 
 export interface TranscriptMessage {
   id: number;
-  author: 'user' | 'ai';
+  author: 'user' | 'ai' | string;
   text: string;
   feedback?: PronunciationFeedback;
   isLoadingFeedback?: boolean;

@@ -18,12 +18,8 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# 1. Define allowed origins
-origins = [
-    "http://localhost:3000",
-    "http://localhost:5173",  # Vite default port
-    "http://127.0.0.1:3000",
-]
+# 1. For development, allow all origins so CORS won't block requests from local frontends
+origins = ["*"]
 
 # 2. Add the Middleware
 app.add_middleware(
