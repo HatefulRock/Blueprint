@@ -173,12 +173,16 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
               <div className="flex items-center gap-2">
                 <button onClick={async () => {
                   const ids = getSelectedWordIds();
-                  if (ids.length === 0) { alert('No words selected'); return; }
+                  if (ids.length === 0) { (window as any).appSetToast?.({ type: 'info', message: 'No words selected' }); return; }
                   try {
                     const vs = await import('../services/vocabService');
+                    // If large selection, let backend decide to enqueue; it returns [] when enqueued
                     const resp = await vs.vocabService.bulkCreateCards(ids);
-                    // show as a toast instead of alert
-                    (window as any).appSetToast?.({ type: 'success', message: `Created ${resp?.length || 0} cards` });
+                    if (Array.isArray(resp) && resp.length === 0 && ids.length > 50) {
+                      (window as any).appSetToast?.({ type: 'info', message: `Large selection: cards are being generated in the background. Check Jobs panel for status.` });
+                    } else {
+                      (window as any).appSetToast?.({ type: 'success', message: `Created ${resp?.length || 0} cards` });
+                    }
                     clearSelection();
                   } catch (e) { console.error(e); (window as any).appSetToast?.({ type: 'error', message: 'Bulk create failed' }); }
                 }} className="px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-md">Bulk Create Cards</button>
