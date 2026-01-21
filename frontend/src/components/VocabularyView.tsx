@@ -177,9 +177,10 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
                   try {
                     const vs = await import('../services/vocabService');
                     const resp = await vs.vocabService.bulkCreateCards(ids);
-                    alert(`Created ${resp?.length || 0} cards`);
+                    // show as a toast instead of alert
+                    (window as any).appSetToast?.({ type: 'success', message: `Created ${resp?.length || 0} cards` });
                     clearSelection();
-                  } catch (e) { console.error(e); alert('Bulk create failed'); }
+                  } catch (e) { console.error(e); (window as any).appSetToast?.({ type: 'error', message: 'Bulk create failed' }); }
                 }} className="px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-md">Bulk Create Cards</button>
 
                 <button onClick={() => { clearSelection(); }} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md">Clear Selection</button>

@@ -3,6 +3,7 @@ import { AppProvider, useApp } from "./context/AppContext";
 import { Header } from "./components/Header";
 import { ViewRenderer } from "./components/ViewRenderer";
 import { ErrorToast } from "./components/ErrorToast";
+import { Toast } from "./components/Toast";
 import { AuthEntry } from "./components/AuthEntry";
 // import { GoalSettingModal } from "./components/GoalSettingModal";
 import { View } from "./types";
@@ -28,6 +29,10 @@ const AppContent = () => {
     error,
     setError,
   } = useApp();
+
+  const [toast, setToast] = React.useState<{ type: 'success'|'error'|'info', message: string } | null>(null);
+  // expose a global setter for quick use in ad-hoc places
+  React.useEffect(() => { (window as any).appSetToast = (t: any) => setToast(t); return () => { (window as any).appSetToast = undefined }; }, []);
 
 
   if (isLoading) {
@@ -77,8 +82,12 @@ const AppContent = () => {
       {/* 2. ONLY RENDER IF ERROR EXISTS */}
       {error && <ErrorToast message={error} onClose={() => setError(null)} />}
 
+      {/* Toast */}
+      <Toast toast={toast} onClose={() => setToast(null)} />
+
       {/* Auth Modal entry point */}
       <AuthEntry />
+      
     </div>
   );
 };
