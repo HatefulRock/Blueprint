@@ -123,6 +123,7 @@ class CardRead(CardBase):
     interval: int
     next_review_date: datetime
     last_reviewed_date: Optional[datetime] = None
+    word_id: Optional[int] = None
 
     class Config:
         orm_mode = True
