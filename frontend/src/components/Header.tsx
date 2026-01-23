@@ -1,5 +1,8 @@
 import React from 'react';
 import { View, AnalysisDisplayMode, LanguageOption } from '../types';
+import { HeaderDropdown } from './HeaderDropdown';
+import { UserProfileDropdown } from './UserProfileDropdown';
+import { useLastVisitedView } from '../hooks/useLastVisitedView';
 import { BookOpenIcon } from './icons/BookOpenIcon';
 import { CollectionIcon } from './icons/CollectionIcon';
 import { BoltIcon } from './icons/BoltIcon';
@@ -7,8 +10,10 @@ import { ChatBubbleIcon } from './icons/ChatBubbleIcon';
 import { HomeIcon } from './icons/HomeIcon';
 import { PencilSquareIcon } from './icons/PencilSquareIcon';
 import { AdjustmentsHorizontalIcon } from './icons/AdjustmentsHorizontalIcon';
-// import { TrophyIcon } from './icons/TrophyIcon';
-// import { UserIcon } from './icons/UserIcon';
+import { MicrophoneIcon } from './icons/MicrophoneIcon';
+import { DocumentTextIcon } from './icons/DocumentTextIcon';
+import { AcademicCapIcon } from './icons/AcademicCapIcon';
+import { ChartBarIcon } from './icons/ChartBarIcon';
 
 
 interface HeaderProps {
@@ -40,16 +45,37 @@ const NavButton = ({ isActive, onClick, children }: { isActive: boolean, onClick
 );
 
 
-export const Header = ({ 
-    currentView, setCurrentView, wordCount, /*points, streak,*/ displayMode, onDisplayModeChange, 
-    supportedLanguages, targetLanguage, uiLanguage, onTargetLanguageChange, onUiLanguageChange 
+export const Header = ({
+    currentView, setCurrentView, wordCount, /*points, streak,*/ displayMode, onDisplayModeChange,
+    supportedLanguages, targetLanguage, uiLanguage, onTargetLanguageChange, onUiLanguageChange
 }: HeaderProps) => {
   // Settings navigation — open full Settings view
   const openSettings = () => setCurrentView(View.Settings);
 
+  // Track last visited views for each group
+  const { getLastVisitedView, isViewInGroup } = useLastVisitedView(currentView);
+
   // Build language list combining defaults + custom ones from parent (from App)
   // The header receives supportedLanguages prop; App will include customTargetLanguages there.
   const targetLangOptions = supportedLanguages.target;
+
+  // Define navigation groups
+  const learnOptions = [
+    { label: 'Reader', view: View.Reader, icon: BookOpenIcon },
+    { label: 'Vocabulary', view: View.Vocabulary, icon: CollectionIcon },
+    { label: 'Conversation', view: View.Conversation, icon: ChatBubbleIcon },
+  ];
+
+  const practiceOptions = [
+    { label: 'Flashcards', view: View.Flashcards, icon: BoltIcon },
+    { label: 'Grammar', view: View.Grammar, icon: AcademicCapIcon },
+    { label: 'Pronunciation', view: View.Pronunciation, icon: MicrophoneIcon },
+    { label: 'Exercises', view: View.Practice, icon: PencilSquareIcon },
+  ];
+
+  const progressOptions = [
+    { label: 'Analytics', view: View.Analytics, icon: ChartBarIcon },
+  ];
 
   return (
     <header className="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700 p-4 flex justify-between items-center sticky top-0 z-20">
@@ -61,70 +87,66 @@ export const Header = ({
           <HomeIcon className="w-5 h-5" />
           Dashboard
         </NavButton>
-        <NavButton isActive={currentView === View.Reader} onClick={() => setCurrentView(View.Reader)}>
-          <BookOpenIcon className="w-5 h-5" />
-          Reader
+
+        <HeaderDropdown
+          label="Learn"
+          icon={BookOpenIcon}
+          options={learnOptions}
+          currentView={currentView}
+          onNavigate={setCurrentView}
+          isActive={isViewInGroup(currentView, 'learn')}
+          lastVisitedView={getLastVisitedView('learn')}
+        />
+
+        <HeaderDropdown
+          label="Practice"
+          icon={BoltIcon}
+          options={practiceOptions}
+          currentView={currentView}
+          onNavigate={setCurrentView}
+          isActive={isViewInGroup(currentView, 'practice')}
+          lastVisitedView={getLastVisitedView('practice')}
+        />
+
+        <NavButton isActive={currentView === View.Writing} onClick={() => setCurrentView(View.Writing)}>
+          <DocumentTextIcon className="w-5 h-5" />
+          Write
         </NavButton>
-        <NavButton isActive={currentView === View.Vocabulary} onClick={() => setCurrentView(View.Vocabulary)}>
-          <CollectionIcon className="w-5 h-5" />
-          Vocabulary
-        </NavButton>
-        <NavButton isActive={currentView === View.Flashcards} onClick={() => setCurrentView(View.Flashcards)}>
-          <BoltIcon className="w-5 h-5" />
-          Flashcards
-        </NavButton>
-        <NavButton isActive={currentView === View.Practice} onClick={() => setCurrentView(View.Practice)}>
-          <PencilSquareIcon className="w-5 h-5" />
-          Practice
-        </NavButton>
-         <NavButton isActive={currentView === View.Conversation} onClick={() => setCurrentView(View.Conversation)}>
-          <ChatBubbleIcon className="w-5 h-5" />
-          Conversation
-        </NavButton>
+
+        <HeaderDropdown
+          label="Progress"
+          icon={ChartBarIcon}
+          options={progressOptions}
+          currentView={currentView}
+          onNavigate={setCurrentView}
+          isActive={isViewInGroup(currentView, 'progress')}
+          lastVisitedView={getLastVisitedView('progress')}
+        />
       </nav>
-      <div className="flex items-center gap-6 text-sm">
-         <div className="flex items-center gap-4">
-            <div>
-                <label htmlFor="target-lang-header" className="text-xs text-slate-400 mr-2">Target:</label>
-                <select 
-                    id="target-lang-header" 
-                    value={targetLanguage} 
-                    onChange={e => onTargetLanguageChange(e.target.value)} 
-                    className="bg-slate-700 border border-slate-600 rounded-md px-2 py-1 text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-sky-500"
-                >
-                    {supportedLanguages.target.map(lang => (
-                        <option key={lang.code} value={lang.code}>{lang.name}</option>
-                    ))}
-                </select>
-            </div>
-            <div>
-                <button onClick={() => setCurrentView(View.Settings)} className="ml-2 text-xs px-2 py-1 bg-slate-700 rounded text-slate-200">Settings</button>
-            </div>
-            <div>
-                <label htmlFor="ui-lang-header" className="text-xs text-slate-400 mr-2">UI:</label>
-                <select 
-                    id="ui-lang-header" 
-                    value={uiLanguage} 
-                    onChange={e => onUiLanguageChange(e.target.value)} 
-                    className="bg-slate-700 border border-slate-600 rounded-md px-2 py-1 text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-sky-500"
-                >
-                     {supportedLanguages.ui.map(lang => (
-                        <option key={lang.code} value={lang.code}>{lang.name}</option>
-                    ))}
-                </select>
-            </div>
+      <div className="flex items-center gap-4 text-sm">
+        {/* Target Language Selector */}
+        <div className="flex items-center gap-2">
+          <label htmlFor="target-lang-header" className="text-xs text-slate-400">Target:</label>
+          <select
+            id="target-lang-header"
+            value={targetLanguage}
+            onChange={e => onTargetLanguageChange(e.target.value)}
+            className="bg-slate-700 border border-slate-600 rounded-md px-2 py-1 text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-sky-500"
+          >
+            {supportedLanguages.target.map(lang => (
+              <option key={lang.code} value={lang.code}>{lang.name}</option>
+            ))}
+          </select>
         </div>
 
-        <div className="flex flex-col items-center">
-          <span className="font-bold text-sky-400 text-lg">{wordCount}</span>
-          <span className="text-slate-400">Words</span>
+        {/* Word Count */}
+        <div className="flex items-center gap-2 px-3 py-1 bg-slate-700/30 rounded-md">
+          <span className="font-bold text-sky-400 text-base">{wordCount}</span>
+          <span className="text-slate-400 text-xs">Words</span>
         </div>
-        
-        <div>
-            <button onClick={openSettings} className="p-2 rounded-full text-slate-300 hover:bg-slate-700 hover:text-white transition-colors">
-                <AdjustmentsHorizontalIcon className="w-5 h-5" />
-            </button>
-        </div>
+
+        {/* User Profile Dropdown */}
+        <UserProfileDropdown onNavigateToSettings={openSettings} />
       </div>
     </header>
   );

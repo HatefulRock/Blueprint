@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import users, words, content, ai, conversation, leaderboard, analytics
+from .routers import auth, users, words, content, ai, conversation, leaderboard, analytics, writing, grammar, templates, vocab, practice
 from backend.models import (
     User,
     Deck,
@@ -31,6 +31,7 @@ app.add_middleware(
 )
 
 # 3. Include your routers
+app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(words.router)
 app.include_router(content.router)
@@ -38,6 +39,11 @@ app.include_router(ai.router)
 app.include_router(conversation.router)
 app.include_router(leaderboard.router)
 app.include_router(analytics.router)
+app.include_router(writing.router)
+app.include_router(grammar.router)
+app.include_router(templates.router)
+app.include_router(vocab.router)
+app.include_router(practice.router)
 
 
 @app.get("/")

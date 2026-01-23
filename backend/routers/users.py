@@ -4,9 +4,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
+from ..services.auth import get_current_user
 from ..services.database import get_db
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+@router.get("/me", response_model=schemas.UserMe)
+def get_current_user_profile(current_user: models.User = Depends(get_current_user)):
+    """Get current authenticated user profile."""
+    return current_user
 
 
 @router.post("/", response_model=schemas.UserRead)
@@ -28,11 +35,12 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     return new_user
 
 
-@router.get("/{user_id}", response_model=schemas.UserRead)
-def get_user_stats(user_id: int, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+@router.get("/stats", response_model=schemas.UserRead)
+def get_user_stats(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user = current_user
     # Ensure numeric fields are not None to satisfy response schema
     if getattr(user, "new_words_this_week", None) is None:
         user.new_words_this_week = 0
@@ -45,12 +53,13 @@ def get_user_stats(user_id: int, db: Session = Depends(get_db)):
     return user
 
 
-@router.post("/{user_id}/check-in")
-def check_in(user_id: int, db: Session = Depends(get_db)):
+@router.post("/check-in")
+def check_in(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     # 1. Get the user
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = current_user
 
     if user.points is None:
         user.points = 0
@@ -95,12 +104,15 @@ def check_in(user_id: int, db: Session = Depends(get_db)):
     return {"message": message, "streak": user.streak, "points": user.points}
 
 
-@router.get("/{user_id}/progress")
-def get_detailed_progress(user_id: int, db: Session = Depends(get_db)):
+@router.get("/progress")
+def get_detailed_progress(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Calculates progress against goals for the Dashboard view.
     """
-    user = db.query(models.User).filter(models.User.id == user_id).first()
+    user = current_user
     # In a real app, you'd query the PracticeSession table here to get
     # actual counts for the current week.
 
@@ -110,16 +122,17 @@ def get_detailed_progress(user_id: int, db: Session = Depends(get_db)):
         "weekly_words": user.new_words_this_week,
         "weekly_sessions": user.practice_sessions_this_week,
         "total_decks": db.query(models.Deck)
-        .filter(models.Deck.user_id == user_id)
+        .filter(models.Deck.user_id == user.id)
         .count(),
     }
 
 
-@router.get("/{user_id}/dashboard", response_model=dict)
-async def get_dashboard_data(user_id: int, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+@router.get("/dashboard", response_model=dict)
+async def get_dashboard_data(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user = current_user
 
     # Fetch due words count for the study plan
     due_words_count = (

@@ -1,8 +1,17 @@
 import os
+import sys
 from logging.config import fileConfig
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+
+# Import Base from db.py directly
+from db import Base
+
+# Import all models to ensure they're registered with Base
+import models
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -10,12 +19,6 @@ config = context.config
 
 # Interpret the config file for Python logging.
 fileConfig(config.config_file_name)
-
-# add your model's MetaData object here for 'autogenerate' support
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from services.database import Base
 
 # target_metadata for autogenerate
 target_metadata = Base.metadata

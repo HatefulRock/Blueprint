@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from .. import models
 from ..models import Word
+from ..services.auth import get_current_user
 from ..services.database import get_db
 from ..services.practice_generator import PracticeGenerator
 
@@ -41,15 +42,19 @@ async def get_practice_session(deck_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/session")
-def create_study_session(payload: dict = Body(...), db: Session = Depends(get_db)):
+def create_study_session(
+    payload: dict = Body(...),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Create a study session (server-curated queue) for flashcards.
-    payload: {deck_id: int|null, user_id: int, limit: int}
+    payload: {deck_id: int|null, limit: int}
     Returns list of Card objects ready for review ordered by priority.
     """
 
     deck_id = payload.get("deck_id")
-    user_id = payload.get("user_id")
     limit = int(payload.get("limit", 20))
+    user_id = current_user.id
 
     now = datetime.datetime.utcnow()
 

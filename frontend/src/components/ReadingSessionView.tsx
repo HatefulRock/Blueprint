@@ -24,6 +24,7 @@ interface ReadingSessionViewProps {
   // Adjusted type for onSaveWord to make it flexible for UI components
   onSaveWord: (wordData: any) => void;
   isWordInBank: boolean;
+  onGenerateExercises?: () => void;
 }
 
 export const ReadingSessionView = ({
@@ -44,6 +45,7 @@ export const ReadingSessionView = ({
   setIsPopupOpen,
   onSaveWord,
   isWordInBank,
+  onGenerateExercises,
 }: ReadingSessionViewProps) => {
   const handleSelection = () => {
     const windowSelection = window.getSelection();
@@ -57,10 +59,62 @@ export const ReadingSessionView = ({
         ? "sentence"
         : "word";
 
+    // NEW: Extract surrounding sentence as context for single words
+    let contextSentence = selectedText;
+    if (type === "word") {
+      try {
+        const range = windowSelection?.getRangeAt(0);
+        const container = range?.commonAncestorContainer;
+
+        // Get the text content from the parent element or text node
+        let fullText = "";
+        if (container?.nodeType === Node.TEXT_NODE) {
+          fullText = container.parentElement?.textContent || container.textContent || "";
+        } else if (container?.nodeType === Node.ELEMENT_NODE) {
+          fullText = (container as Element).textContent || "";
+        }
+
+        if (fullText) {
+          const wordIndex = fullText.indexOf(selectedText);
+          if (wordIndex !== -1) {
+            const beforeWord = fullText.substring(0, wordIndex);
+            const afterWord = fullText.substring(wordIndex + selectedText.length);
+
+            // Find sentence boundaries (period, exclamation, question mark, or Chinese equivalents)
+            const sentenceEnders = ['.', '!', '?', '。', '！', '？'];
+            let sentenceStart = 0;
+            for (const ender of sentenceEnders) {
+              const lastIndex = beforeWord.lastIndexOf(ender);
+              if (lastIndex > sentenceStart) {
+                sentenceStart = lastIndex + 1;
+              }
+            }
+
+            let sentenceEnd = afterWord.length;
+            for (const ender of sentenceEnders) {
+              const firstIndex = afterWord.indexOf(ender);
+              if (firstIndex !== -1 && firstIndex < sentenceEnd) {
+                sentenceEnd = firstIndex + 1;
+              }
+            }
+
+            contextSentence = fullText.substring(
+              sentenceStart,
+              wordIndex + selectedText.length + sentenceEnd
+            ).trim();
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to extract context sentence:", e);
+        contextSentence = selectedText;
+      }
+    }
+
     // Call prop method to update parent state
     onTextSelect({
       text: selectedText,
       type: type,
+      contextSentence: type === "word" ? contextSentence : undefined,
     });
 
     setIsPopupOpen(true);
@@ -103,9 +157,21 @@ export const ReadingSessionView = ({
           {typeof title === "string" ? title : "Reading Session"}
         </h1>
 
-        <div className="hidden md:flex w-40 justify-end items-center gap-2">
-          <span className="text-xs text-slate-500 font-mono">READER MODE</span>
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+        <div className="flex items-center gap-3">
+          {onGenerateExercises && (
+            <button
+              onClick={onGenerateExercises}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium text-sky-400 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 transition-all"
+              title="Generate grammar exercises from this text"
+            >
+              <span className="hidden md:inline">Generate Exercises</span>
+              <span className="md:hidden">Exercises</span>
+            </button>
+          )}
+          <div className="hidden md:flex items-center gap-2">
+            <span className="text-xs text-slate-500 font-mono">READER MODE</span>
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+          </div>
         </div>
       </header>
 

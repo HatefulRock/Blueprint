@@ -22,6 +22,41 @@ class UserRead(UserBase):
         orm_mode = True
 
 
+# --- Authentication Schemas ---
+class UserRegister(BaseModel):
+    username: str
+    password: str
+    email: Optional[str] = None
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+class Token(BaseModel):
+    token: str
+    token_type: str = "bearer"
+    id: int
+    username: str
+
+
+class TokenData(BaseModel):
+    user_id: Optional[int] = None
+    username: Optional[str] = None
+
+
+class UserMe(BaseModel):
+    id: int
+    username: str
+    email: Optional[str] = None
+    points: int
+    streak: int
+
+    class Config:
+        orm_mode = True
+
+
 class GoalUpdate(BaseModel):
     words_per_week: int
     practice_sessions_per_week: int
@@ -34,7 +69,7 @@ class WordBase(BaseModel):
     part_of_speech: Optional[str] = None
     grammatical_breakdown: Optional[str] = None
     literal_translation: Optional[str] = None
-    deck_id: int
+    deck_id: Optional[int] = None
 
     # New fields for phased rollout
     reading_content_id: Optional[int] = None
@@ -79,12 +114,13 @@ class ContentBase(BaseModel):
 
 
 class ContentCreate(ContentBase):
-    user_id: int
+    user_id: Optional[int] = None
 
 
 class ContentImport(BaseModel):
     url: str
-    user_id: int
+    user_id: Optional[int] = None
+    target_language: Optional[str] = None
 
 
 class ContentRead(ContentBase):
@@ -101,10 +137,18 @@ class CardTemplateBase(BaseModel):
     name: str
     front_template: str
     back_template: str
+    language: Optional[str] = None
 
 
 class CardTemplateCreate(CardTemplateBase):
     user_id: Optional[int] = None
+
+
+class CardTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    front_template: Optional[str] = None
+    back_template: Optional[str] = None
+    language: Optional[str] = None
 
 
 class CardTemplateRead(CardTemplateBase):
@@ -145,6 +189,7 @@ class DeckRead(BaseModel):
     user_id: int
     name: str
     language: str
+    default_template_id: Optional[int] = None
 
     class Config:
         orm_mode = True
@@ -161,11 +206,21 @@ class AnalysisRequest(BaseModel):
     context_sentence: Optional[str] = None
 
 
+class UsageExample(BaseModel):
+    example: str
+    translation: str
+
+
 class AnalysisResponse(BaseModel):
     translation: str
-    literal_translation: str
-    grammar_breakdown: str
-    vocabulary: List[dict]  # [{term, pos, translation}]
+    literal_translation: Optional[str] = None
+    grammar_breakdown: Optional[str] = None
+    vocabulary: Optional[List[dict]] = None  # [{term, pos, translation, pinyin}]
+    difficulty_level: Optional[str] = None
+    usage_examples: Optional[List[UsageExample]] = None
+    memory_aid: Optional[str] = None
+    related_words: Optional[List[str]] = None
+    context_sentence: Optional[str] = None
 
 
 class ExplanationRequest(BaseModel):
@@ -241,3 +296,129 @@ class DictionaryLookupResponse(BaseModel):
     native_language: Optional[str] = None
     entry: Optional[DictionaryEntry] = None
     raw: Optional[dict] = None
+
+
+# --- Writing Submission Schemas ---
+class WritingSubmissionCreate(BaseModel):
+    title: Optional[str] = None
+    content: str
+    prompt: Optional[str] = None
+    language: str
+    submission_type: str = "journal"  # journal, essay, letter, story
+
+
+class WritingSubmissionUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    grammar_feedback: Optional[str] = None
+    corrected_text: Optional[str] = None
+    overall_feedback: Optional[str] = None
+    score: Optional[int] = None
+
+
+class WritingSubmissionRead(BaseModel):
+    id: int
+    user_id: int
+    title: Optional[str]
+    content: str
+    prompt: Optional[str]
+    word_count: int
+    language: str
+    submission_type: str
+    grammar_feedback: Optional[str]
+    corrected_text: Optional[str]
+    overall_feedback: Optional[str]
+    score: Optional[int]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class GrammarCheckRequest(BaseModel):
+    text: str
+    language: str
+
+
+class GrammarCheckResponse(BaseModel):
+    original_text: str
+    corrected_text: str
+    corrections: List[dict]  # List of {position, original, correction, explanation}
+    feedback: str
+
+
+class EssayFeedbackRequest(BaseModel):
+    text: str
+    language: str
+    submission_type: str = "essay"
+
+
+class EssayFeedbackResponse(BaseModel):
+    score: int  # 0-100
+    strengths: List[str]
+    areas_for_improvement: List[str]
+    vocabulary_suggestions: List[dict]
+    grammar_notes: str
+    overall_feedback: str
+
+
+# --- Grammar Exercise Schemas ---
+class GrammarExerciseRead(BaseModel):
+    id: int
+    exercise_set_id: int
+    exercise_type: str
+    question: str
+    correct_answer: str
+    options: Optional[str]
+    explanation: Optional[str]
+    grammar_point: Optional[str]
+    attempts: int
+    correct_attempts: int
+    last_attempted: Optional[datetime]
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class GrammarExerciseSetRead(BaseModel):
+    id: int
+    user_id: int
+    reading_content_id: Optional[int]
+    title: str
+    language: str
+    difficulty_level: Optional[str]
+    source_text: Optional[str]
+    total_exercises: int
+    completed_exercises: int
+    created_at: datetime
+    exercises: List[GrammarExerciseRead] = []
+
+    class Config:
+        orm_mode = True
+
+
+class GenerateExercisesRequest(BaseModel):
+    text: str
+    language: str
+    difficulty_level: Optional[str] = None
+    exercise_types: List[str] = [
+        "fill_blank",
+        "transformation",
+        "multiple_choice",
+        "correction",
+    ]
+    num_exercises: int = 10
+
+
+class CheckAnswerRequest(BaseModel):
+    exercise_id: int
+    user_answer: str
+
+
+class CheckAnswerResponse(BaseModel):
+    is_correct: bool
+    correct_answer: str
+    explanation: str
+    user_answer: str

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { CuratedText, ActiveReadingText } from "../types";
+import { CuratedText, ActiveReadingText, ReadingContent } from "../types";
 import { CURATED_CONTENT } from "../data/curatedContent";
 import { DocumentArrowUpIcon } from "./icons/DocumentArrowUpIcon";
 import { ClipboardDocumentIcon } from "./icons/ClipboardDocumentIcon";
@@ -27,14 +27,14 @@ const TrashIcon = ({ className }: { className?: string }) => (
 // --- ContentLibrary Component ---
 const ContentLibrary = ({
   onSelectCuratedText,
-  onDeleteArticle, // NEW PROP
+  onDeleteArticle,
   targetLanguage,
   userArticles,
 }: {
-  onSelectCuratedText: (text: any) => void;
-  onDeleteArticle: (id: number) => void; // Defined type
+  onSelectCuratedText: (text: CuratedText | ReadingContent) => void;
+  onDeleteArticle: (id: number) => void;
   targetLanguage: string;
-  userArticles: any[];
+  userArticles: ReadingContent[];
 }) => {
   const contentForLanguage = (CURATED_CONTENT || []).filter(
     (c) => c.language === targetLanguage,
@@ -62,8 +62,8 @@ const ContentLibrary = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {(userArticles || []).map((article) => (
                 <div
-                  key={(article && ((article as any).id || Math.random()))}
-                  className="relative group" // Added relative for positioning delete button
+                  key={article.id}
+                  className="relative group"
                 >
                 <button
                   onClick={() => onSelectCuratedText(article)}
@@ -72,18 +72,17 @@ const ContentLibrary = ({
                   <div className="flex justify-between items-start mb-2 pr-6">
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                        LEVEL_COLORS[(article as any).difficulty_score as string] ||
-                        "bg-slate-700 text-slate-400"
+                        article.difficulty_score ? LEVEL_COLORS[article.difficulty_score] || "bg-slate-700 text-slate-400" : "bg-slate-700 text-slate-400"
                       }`}
                     >
                       {article.difficulty_score || "New"}
                     </span>
                   </div>
                   <div className="font-bold text-white group-hover:text-sky-400 transition-colors">
-                    {(article && (article as any).title) || 'Untitled'}
+                    {article.title || 'Untitled'}
                   </div>
                   <div className="text-xs text-slate-500 line-clamp-1 mt-1">
-                    {(article && (article as any).content ? (article as any).content.substring(0,100) : '')}...
+                    {article.content.substring(0, 100)}...
                   </div>
                 </button>
 
@@ -178,7 +177,7 @@ export const ReaderView = ({
   useEffect(() => {
     const loadLibrary = async () => {
       try {
-        const response = await contentService.getUserContent(1); // User ID 1
+        const response = await contentService.getUserContent();
         // contentService may return axios response or already-unwrapped data depending on interceptor
         const articles = (response && (response.data ?? response)) ?? [];
         setUserArticles(articles);
@@ -208,7 +207,7 @@ export const ReaderView = ({
     e.preventDefault();
     setIsFetching(true);
     try {
-      const response = await contentService.importUrl(url, 1);
+      const response = await contentService.importUrl(url, targetLanguage);
       const newArticle = (response && (response.data ?? response)) || null;
       if (newArticle) {
         setUserArticles((prev) => [newArticle, ...prev]);
@@ -255,8 +254,7 @@ export const ReaderView = ({
       if (content) {
         const response = await contentService.saveManualContent(
           file.name,
-          content,
-          1,
+          content
         );
         const newArticle = response.data;
         setUserArticles((prev) => [newArticle, ...prev]);
@@ -279,8 +277,7 @@ export const ReaderView = ({
       if (clipboardText) {
         const response = await contentService.saveManualContent(
           "Pasted Text " + new Date().toLocaleTimeString(),
-          clipboardText,
-          1,
+          clipboardText
         );
         setUserArticles([response.data, ...userArticles]);
         onStartReadingSession({

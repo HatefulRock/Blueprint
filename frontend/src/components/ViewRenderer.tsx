@@ -1,7 +1,8 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
 import { View, Selection } from "../types";
 import { findContextSentence } from "../utils";
+import { grammarService } from "../services/api";
 
 // Components
 import { DashboardView } from "./DashboardView";
@@ -14,6 +15,9 @@ import { ReaderView } from "./ReaderView";
 import { ConversationView } from "./ConversationView";
 import { AnalyticsView } from "./AnalyticsView";
 import { SettingsPage } from "./SettingsPage";
+import { PronunciationPractice } from "./PronunciationPractice";
+import { WritingPractice } from "./WritingPractice";
+import { GrammarExercises } from "./GrammarExercises";
 
 export const ViewRenderer: React.FC = () => {
   const {
@@ -43,6 +47,8 @@ export const ViewRenderer: React.FC = () => {
     handlePlayAudio,
   } = useApp();
 
+  const [isGeneratingExercises, setIsGeneratingExercises] = useState(false);
+
   // Helper: Start session
   const handleStartReadingSession = (data: {
     title: string;
@@ -71,23 +77,66 @@ export const ViewRenderer: React.FC = () => {
     };
 
     try {
+      // Get auth token from localStorage
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       // Try new endpoint first
-      await fetch(`/vocab/capture`, {
+      const response = await fetch(`http://localhost:8000/vocab/capture`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload),
       });
+
+      if (response.ok) {
+        // Show success toast
+        if ((window as any).appSetToast) {
+          (window as any).appSetToast({
+            type: 'success',
+            message: `✓ "${wordData.term}" added to vocabulary`
+          });
+        }
+      } else {
+        throw new Error('Failed to save word');
+      }
     } catch (e) {
       // Fallback to legacy endpoint
       try {
-        await fetch(`/words`, {
+        const token = localStorage.getItem('authToken');
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const response = await fetch(`http://localhost:8000/words`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ ...payload, deck_id: payload.deck_id }),
         });
+
+        if (response.ok) {
+          // Show success toast
+          if ((window as any).appSetToast) {
+            (window as any).appSetToast({
+              type: 'success',
+              message: `✓ "${wordData.term}" added to vocabulary`
+            });
+          }
+        } else {
+          throw new Error('Failed to save word');
+        }
       } catch (err) {
         console.error('Failed to save word to server', err);
-        // Also update locally via Context action if needed
+        // Show error toast
+        if ((window as any).appSetToast) {
+          (window as any).appSetToast({
+            type: 'error',
+            message: `Failed to save "${wordData.term}"`
+          });
+        }
       }
     }
 
@@ -112,6 +161,43 @@ export const ViewRenderer: React.FC = () => {
       await handleRequestDeepAnalysis(selection.text, context);
     } catch (e) {
       console.error("Deep analysis request failed", e);
+    }
+  };
+
+  // Handler for generating grammar exercises from reading content
+  const handleGenerateExercisesFromReading = async () => {
+    if (!activeReadingText || isGeneratingExercises) return;
+
+    try {
+      setIsGeneratingExercises(true);
+
+      await grammarService.generateExercises({
+        text: activeReadingText.content,
+        language: targetLanguage,
+        num_exercises: 10,
+        exercise_types: ['fill_blank', 'transformation', 'multiple_choice', 'correction']
+      });
+
+      // Show success toast
+      if ((window as any).appSetToast) {
+        (window as any).appSetToast({
+          type: 'success',
+          message: 'Grammar exercises generated successfully!'
+        });
+      }
+
+      // Switch to Grammar view
+      setCurrentView(View.Grammar);
+    } catch (error) {
+      console.error("Failed to generate exercises:", error);
+      if ((window as any).appSetToast) {
+        (window as any).appSetToast({
+          type: 'error',
+          message: 'Failed to generate exercises. Please try again.'
+        });
+      }
+    } finally {
+      setIsGeneratingExercises(false);
     }
   };
 
@@ -174,6 +260,7 @@ export const ViewRenderer: React.FC = () => {
            isWordInBank={wordBank?.some(
              (w) => w.term.toLowerCase() === selection?.text.toLowerCase(),
            ) ?? false}
+          onGenerateExercises={handleGenerateExercisesFromReading}
         />
       );
 
@@ -210,6 +297,18 @@ export const ViewRenderer: React.FC = () => {
 
     case View.Conversation:
       return <ConversationView targetLanguage={targetLanguage} />;
+
+    case View.Pronunciation:
+      return <PronunciationPractice targetLanguage={targetLanguage} />;
+
+    case View.Writing:
+      return <WritingPractice targetLanguage={targetLanguage} />;
+
+    case View.Grammar:
+      return <GrammarExercises targetLanguage={targetLanguage} />;
+
+    case View.Analytics:
+      return <AnalyticsView />;
 
     case View.Settings:
       return <SettingsPage />;

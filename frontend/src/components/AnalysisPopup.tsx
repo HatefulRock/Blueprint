@@ -37,12 +37,16 @@ const AnalysisSection = ({ title, content }: { title: string, content: string | 
 };
 
 export const AnalysisPopup = ({ selection, analysisResult, isLoading, isDeepLoading, onRequestDeepAnalysis, onPlayAudio, onClose, onSaveWord, isWordInBank, wordBank = [] }: AnalysisPopupProps) => {
+  const [isSaving, setIsSaving] = React.useState(false);
 
   if (!selection) return null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selection || !analysisResult || selection.type !== 'word' || isWordInBank) return;
-    onSaveWord({ 
+
+    setIsSaving(true);
+
+    await onSaveWord({
         term: selection.text,
         analysis: {
             translation: analysisResult.translation,
@@ -50,7 +54,12 @@ export const AnalysisPopup = ({ selection, analysisResult, isLoading, isDeepLoad
             grammaticalBreakdown: analysisResult.grammaticalBreakdown || "No detailed breakdown available."
         }
     });
-    onClose();
+
+    // Brief delay to show the success state
+    setTimeout(() => {
+      setIsSaving(false);
+      onClose();
+    }, 500);
   };
 
   const handleSaveBreakdownWord = (term: string, translation: string, partOfSpeech: string) => {
@@ -100,9 +109,22 @@ export const AnalysisPopup = ({ selection, analysisResult, isLoading, isDeepLoad
               <>
                 <AnalysisSection title="Translation" content={analysisResult.translation} />
                 <AnalysisSection title="Part of Speech" content={analysisResult.partOfSpeech} />
-                
+
+                {/* Context Section - PROMINENTLY DISPLAYED for single words */}
+                {selection.type === 'word' && analysisResult.contextSentence && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">📝</span>
+                      <h3 className="text-sm font-semibold text-amber-400">Context</h3>
+                    </div>
+                    <p className="text-slate-200 italic leading-relaxed">
+                      "{analysisResult.contextSentence}"
+                    </p>
+                  </div>
+                )}
+
                 {showDeepAnalysisButton && (
-                   <button 
+                   <button
                     onClick={onRequestDeepAnalysis}
                     className="w-full bg-sky-600 hover:bg-sky-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
                     <SparklesIcon className="w-5 h-5" />
@@ -119,6 +141,55 @@ export const AnalysisPopup = ({ selection, analysisResult, isLoading, isDeepLoad
 
                 <AnalysisSection title="Literal Translation" content={analysisResult.literalTranslation} />
                 <AnalysisSection title="Grammatical Breakdown" content={analysisResult.grammaticalBreakdown} />
+
+                {/* Usage Examples Section */}
+                {analysisResult.usageExamples && analysisResult.usageExamples.length > 0 && (
+                  <div className="pt-4 border-t border-slate-700">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-lg">💡</span>
+                      <h3 className="text-sm font-semibold text-sky-400">Usage Examples</h3>
+                    </div>
+                    <div className="space-y-3">
+                      {analysisResult.usageExamples.map((example, idx) => (
+                        <div key={idx} className="bg-slate-700/20 rounded-lg p-3 border border-slate-700">
+                          <p className="text-emerald-300 font-medium mb-1">{example.example}</p>
+                          <p className="text-slate-400 text-sm">{example.translation}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Memory Aid Section */}
+                {analysisResult.memoryAid && (
+                  <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">🎯</span>
+                      <h3 className="text-sm font-semibold text-purple-400">Memory Aid</h3>
+                    </div>
+                    <p className="text-slate-200 leading-relaxed">{analysisResult.memoryAid}</p>
+                  </div>
+                )}
+
+                {/* Related Words Section */}
+                {analysisResult.relatedWords && analysisResult.relatedWords.length > 0 && (
+                  <div className="pt-4 border-t border-slate-700">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-lg">🔗</span>
+                      <h3 className="text-sm font-semibold text-sky-400">Related Words</h3>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {analysisResult.relatedWords.map((word, idx) => (
+                        <span
+                          key={idx}
+                          className="bg-slate-700/50 hover:bg-slate-700 px-3 py-1.5 rounded-full text-sm text-slate-300 border border-slate-600 transition-colors cursor-pointer"
+                        >
+                          {word}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Sentence Word Breakdown Section */}
                 {analysisResult.wordBreakdown && analysisResult.wordBreakdown.length > 0 && (
@@ -165,12 +236,25 @@ export const AnalysisPopup = ({ selection, analysisResult, isLoading, isDeepLoad
 
         {selection.type === 'word' && (
             <div className="p-4 bg-slate-800/50 border-t border-slate-700 flex justify-end mt-auto flex-shrink-0">
-                <button 
+                <button
                     onClick={handleSave}
-                    disabled={!canSave}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={!canSave || isSaving}
+                    className={`px-4 py-2 font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 ${
+                      isSaving
+                        ? 'bg-emerald-500 scale-95'
+                        : 'bg-emerald-600 hover:bg-emerald-700'
+                    }`}
                 >
-                    {isWordInBank ? 'Word in Vocabulary' : 'Save to Vocabulary'}
+                    {isSaving ? (
+                      <>
+                        <CheckCircleIcon className="w-5 h-5 animate-bounce" />
+                        <span>Saved!</span>
+                      </>
+                    ) : isWordInBank ? (
+                      'Word in Vocabulary'
+                    ) : (
+                      'Save to Vocabulary'
+                    )}
                 </button>
             </div>
         )}

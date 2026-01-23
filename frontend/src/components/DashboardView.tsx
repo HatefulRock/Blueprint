@@ -128,7 +128,7 @@ export const DashboardView = ({
   useEffect(() => {
     const loadDashboard = async () => {
       try {
-        const response = await dashboardService.getDashboard(1);
+        const response = await dashboardService.getDashboard();
         // api interceptor already returns response.data, so `response` is the payload
         setData(response);
       } catch (err) {

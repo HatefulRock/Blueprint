@@ -1,13 +1,14 @@
 
-import React, { useState, useMemo } from 'react';
-import { Word } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Word, Deck } from '../types';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { SortAscendingIcon } from './icons/SortAscendingIcon';
 import { SortDescendingIcon } from './icons/SortDescendingIcon';
 import { SpeakerWaveIcon } from './icons/SpeakerWaveIcon';
 import { ClockIcon } from './icons/ClockIcon';
+import { wordService } from '../services/api';
 
-type SortKey = 'term' | 'familiarityScore' | 'nextReviewDate';
+type SortKey = 'term' | 'familiarity_score' | 'next_review_date';
 type SortDirection = 'asc' | 'desc';
 
 interface VocabularyViewProps {
@@ -57,11 +58,11 @@ const SortButton = ({ label, sortKey, activeSortKey, activeDirection, onClick }:
 
 const ReviewStatus = ({ dateStr }: { dateStr?: string }) => {
     if (!dateStr) return <span className="text-slate-500 text-xs font-medium px-2 py-1 bg-slate-800 rounded-full">New</span>;
-    
+
     const now = new Date();
     const reviewDate = new Date(dateStr);
     const isDue = reviewDate <= now;
-    
+
     if (isDue) {
         return (
             <div className="flex items-center gap-1 text-amber-400 text-xs font-bold px-2 py-1 bg-amber-500/10 rounded-full w-fit border border-amber-500/20">
@@ -70,10 +71,10 @@ const ReviewStatus = ({ dateStr }: { dateStr?: string }) => {
             </div>
         )
     }
-    
+
     const diffTime = Math.abs(reviewDate.getTime() - now.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-    
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
     return (
         <span className="text-slate-400 text-xs font-medium px-2 py-1 bg-slate-800 rounded-full">
             in {diffDays}d
@@ -81,7 +82,46 @@ const ReviewStatus = ({ dateStr }: { dateStr?: string }) => {
     );
 }
 
+const DeckSelectionModal = ({ decks, onClose, onSelect }: { decks: Deck[], onClose: () => void, onSelect: (deckId: number) => void }) => {
+  return (
+    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 w-full max-w-md m-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <h3 className="text-xl font-bold text-white mb-4">Select Deck</h3>
+        <p className="text-sm text-slate-400 mb-4">Choose which deck to add the selected words to:</p>
+
+        <div className="space-y-2 max-h-96 overflow-y-auto mb-4">
+          {decks.length === 0 ? (
+            <p className="text-slate-500 text-center py-4">No decks available. Create a deck in the Flashcards view first.</p>
+          ) : (
+            decks.map(deck => (
+              <button
+                key={deck.id}
+                onClick={() => onSelect(deck.id)}
+                className="w-full text-left px-4 py-3 bg-slate-700 hover:bg-sky-600 text-white rounded-lg transition-colors flex items-center justify-between group"
+              >
+                <div>
+                  <div className="font-semibold">{deck.name}</div>
+                  <div className="text-xs text-slate-400">{deck.language}</div>
+                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            ))
+          )}
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-slate-300 hover:text-white transition-colors">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: VocabularyViewProps) => {
+  console.log('[VocabularyView] Rendered with wordBank:', wordBank?.length, 'words');
+
   const [expandedTerm, setExpandedTerm] = useState<string | null>(null);
   const [selectedWordId, setSelectedWordId] = useState<number | null>(null);
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
@@ -89,6 +129,11 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
 
   // Multi-select for bulk operations
   const [selectedWords, setSelectedWords] = useState<Record<number, boolean>>({});
+
+  // Deck management
+  const [decks, setDecks] = useState<Deck[]>([]);
+  const [showDeckModal, setShowDeckModal] = useState(false);
+  const [wordsToAssign, setWordsToAssign] = useState<number[]>([]);
 
   const toggleSelectWord = (wordId?: number) => {
     if (!wordId) return;
@@ -102,6 +147,19 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
   const [searchTerm, setSearchTerm] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('term');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  // Load decks on mount
+  useEffect(() => {
+    const loadDecks = async () => {
+      try {
+        const fetchedDecks = await wordService.getDecks();
+        setDecks(fetchedDecks as unknown as Deck[]);
+      } catch (e) {
+        console.error('Failed to fetch decks', e);
+      }
+    };
+    loadDecks();
+  }, []);
 
   const handleToggleExpand = (term: string) => {
       setExpandedTerm(prev => prev === term ? null : term);
@@ -125,6 +183,39 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
       setWordDetail(null);
   }
 
+  const handleAssignToDeck = (wordIds: number[]) => {
+    setWordsToAssign(wordIds);
+    setShowDeckModal(true);
+  };
+
+  const handleDeckSelection = async (deckId: number) => {
+    try {
+      // Move words to selected deck by updating their deck_id
+      for (const wordId of wordsToAssign) {
+        await wordService.updateWord(wordId, { deck_id: deckId });
+      }
+
+      if ((window as any).appSetToast) {
+        (window as any).appSetToast({
+          type: 'success',
+          message: `${wordsToAssign.length} word${wordsToAssign.length !== 1 ? 's' : ''} assigned to deck`
+        });
+      }
+
+      setShowDeckModal(false);
+      setWordsToAssign([]);
+      clearSelection();
+
+      // Refresh the page to show updated deck assignments
+      window.location.reload();
+    } catch (e) {
+      console.error('Failed to assign words to deck', e);
+      if ((window as any).appSetToast) {
+        (window as any).appSetToast({ type: 'error', message: 'Failed to assign words' });
+      }
+    }
+  };
+
   const handleSort = (key: SortKey) => {
       if (key === sortKey) {
           setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -135,9 +226,9 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
   }
 
   const filteredAndSortedWords = useMemo(() => {
-    const filtered = wordBank.filter(word => 
+    const filtered = wordBank.filter(word =>
       word.term.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      word.context.toLowerCase().includes(searchTerm.toLowerCase())
+      (word.context?.toLowerCase() || '').includes(searchTerm.toLowerCase())
     );
 
     return filtered.sort((a, b) => {
@@ -145,7 +236,7 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
       let bVal: any = b[sortKey];
 
       // Handle dates specifically
-      if (sortKey === 'nextReviewDate') {
+      if (sortKey === 'next_review_date') {
           aVal = aVal ? new Date(aVal).getTime() : 0;
           bVal = bVal ? new Date(bVal).getTime() : 0;
       }
@@ -166,26 +257,31 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
   }
 
   return (
-    <div className="flex-1 p-6 md:p-8">
-      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
-        <h2 className="text-3xl font-bold text-white">My Vocabulary</h2>
+    <>
+      {showDeckModal && (
+        <DeckSelectionModal
+          decks={decks}
+          onClose={() => {
+            setShowDeckModal(false);
+            setWordsToAssign([]);
+          }}
+          onSelect={handleDeckSelection}
+        />
+      )}
+
+      <div className="flex-1 p-6 md:p-8">
+        <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
+          <h2 className="text-3xl font-bold text-white">My Vocabulary</h2>
               <div className="flex items-center gap-4 flex-wrap"> 
               <div className="flex items-center gap-2">
-                <button onClick={async () => {
+                <button onClick={() => {
                   const ids = getSelectedWordIds();
-                  if (ids.length === 0) { (window as any).appSetToast?.({ type: 'info', message: 'No words selected' }); return; }
-                  try {
-                    const vs = await import('../services/vocabService');
-                    // If large selection, let backend decide to enqueue; it returns [] when enqueued
-                    const resp = await vs.vocabService.bulkCreateCards(ids);
-                    if (Array.isArray(resp) && resp.length === 0 && ids.length > 50) {
-                      (window as any).appSetToast?.({ type: 'info', message: `Large selection: cards are being generated in the background. Check Jobs panel for status.` });
-                    } else {
-                      (window as any).appSetToast?.({ type: 'success', message: `Created ${resp?.length || 0} cards` });
-                    }
-                    clearSelection();
-                  } catch (e) { console.error(e); (window as any).appSetToast?.({ type: 'error', message: 'Bulk create failed' }); }
-                }} className="px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-md">Bulk Create Cards</button>
+                  if (ids.length === 0) {
+                    (window as any).appSetToast?.({ type: 'info', message: 'No words selected' });
+                    return;
+                  }
+                  handleAssignToDeck(ids);
+                }} className="px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-md">Add to Deck</button>
 
                 <button onClick={() => { clearSelection(); }} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md">Clear Selection</button>
               </div>
@@ -199,8 +295,8 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-400">Sort by:</span>
             <SortButton label="Word" sortKey="term" activeSortKey={sortKey} activeDirection={sortDirection} onClick={handleSort} />
-            <SortButton label="Review" sortKey="nextReviewDate" activeSortKey={sortKey} activeDirection={sortDirection} onClick={handleSort} />
-            <SortButton label="Familiarity" sortKey="familiarityScore" activeSortKey={sortKey} activeDirection={sortDirection} onClick={handleSort} />
+            <SortButton label="Review" sortKey="next_review_date" activeSortKey={sortKey} activeDirection={sortDirection} onClick={handleSort} />
+            <SortButton label="Familiarity" sortKey="familiarity_score" activeSortKey={sortKey} activeDirection={sortDirection} onClick={handleSort} />
           </div>
         </div>
       </div>
@@ -222,24 +318,24 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
             <tbody className="divide-y divide-slate-700">
               {filteredAndSortedWords.map((word, index) => (
                 <React.Fragment key={`${word.term}-${index}`}>
-                   <tr 
+                   <tr
                      className="hover:bg-slate-700/30 transition-colors cursor-pointer"
                      onClick={() => handleToggleExpand(word.term)}
                    >
                      <td className="p-4 font-mono text-emerald-300 align-top">
-                       <input type="checkbox" checked={selectedWords[(word as any).id || 0] || false} onChange={(e) => { e.stopPropagation(); toggleSelectWord((word as any).id); }} />
+                       <input type="checkbox" checked={selectedWords[word.id] || false} onChange={(e) => { e.stopPropagation(); toggleSelectWord(word.id); }} />
                      </td>
                     <td className="p-4 font-mono text-emerald-300 align-top">
                         <div className="flex items-center gap-2">
                             {word.term}
                         </div>
                     </td>
-                    <td className="p-4 text-slate-400 italic align-top hidden md:table-cell">"{word.context}"</td>
+                    <td className="p-4 text-slate-400 italic align-top hidden md:table-cell">"{word.context || ''}"</td>
                     <td className="p-4 align-top">
-                        <ReviewStatus dateStr={word.nextReviewDate} />
+                        <ReviewStatus dateStr={word.next_review_date} />
                     </td>
                     <td className="p-4 align-top text-center">
-                        <button 
+                        <button
                             onClick={(e) => { e.stopPropagation(); onPlayAudio(word.term); }}
                             className="p-1.5 rounded-md bg-slate-700 text-slate-300 hover:bg-sky-600 hover:text-white transition-colors"
                             title={`Listen to ${word.term}`}
@@ -249,18 +345,18 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
                     </td>
                     <td className="p-4 align-top">
                         <div className="flex justify-end items-center gap-3">
-                            <ActionButton 
+                            <ActionButton
                                 onClick={(e) => { e.stopPropagation(); onFamiliarityChange(word.term, -1); }}
-                                disabled={word.familiarityScore <= 1}
+                                disabled={word.familiarity_score <= 1}
                                 label={`Decrease familiarity for ${word.term}`}
                                 className="hover:bg-red-600"
                             >
                               -
                             </ActionButton>
-                            <FamiliarityMeter score={word.familiarityScore} />
-                            <ActionButton 
+                            <FamiliarityMeter score={word.familiarity_score} />
+                            <ActionButton
                                 onClick={(e) => { e.stopPropagation(); onFamiliarityChange(word.term, 1); }}
-                                disabled={word.familiarityScore >= 5}
+                                disabled={word.familiarity_score >= 5}
                                 label={`Increase familiarity for ${word.term}`}
                                 className="hover:bg-emerald-500"
                             >
@@ -270,7 +366,7 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
                     </td>
                       <td className="p-4 text-center">
                         <div className="flex items-center justify-center gap-2">
-                          <button onClick={(e) => { e.stopPropagation(); openDetailDrawer((word as any).id || 0); }} className="px-3 py-1 bg-slate-700 rounded-md text-slate-300 hover:bg-sky-600">Details</button>
+                          <button onClick={(e) => { e.stopPropagation(); openDetailDrawer(word.id); }} className="px-3 py-1 bg-slate-700 rounded-md text-slate-300 hover:bg-sky-600">Details</button>
                           <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${expandedTerm === word.term ? 'rotate-180' : ''}`} />
                         </div>
                       </td>
@@ -281,19 +377,19 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
                          <div className="p-6 flex flex-col md:flex-row gap-6">
                            <div className="space-y-4 flex-grow">
                              <h3 className="text-md font-bold text-white">Analysis Details</h3>
-                             <AnalysisSection title="Translation" content={word.analysis.translation} />
-                             <AnalysisSection title="Literal Translation" content={word.analysis.literalTranslation} />
-                             <AnalysisSection title="Grammatical Breakdown" content={word.analysis.grammaticalBreakdown} />
+                             {word.translation && <AnalysisSection title="Translation" content={word.translation} />}
+                             {word.literal_translation && <AnalysisSection title="Literal Translation" content={word.literal_translation} />}
+                             {word.grammatical_breakdown && <AnalysisSection title="Grammatical Breakdown" content={word.grammatical_breakdown} />}
+                             {word.part_of_speech && <AnalysisSection title="Part of Speech" content={word.part_of_speech} />}
                              <div className="md:hidden mt-4">
                                  <h3 className="text-sm font-semibold text-sky-400 mb-1">Context</h3>
-                                 <p className="text-slate-300 text-sm italic">"{word.context}"</p>
+                                 <p className="text-slate-300 text-sm italic">"{word.context || ''}"</p>
                              </div>
                            </div>
                            <div className="w-80">
                              <h4 className="text-sm font-semibold text-sky-400 mb-2">Actions</h4>
                              <div className="flex flex-col gap-2">
-                                 <button onClick={(e) => { e.stopPropagation(); (async () => { const vs = await import('../services/vocabService'); const resp = await vs.vocabService.bulkCreateCards([(word as any).id]); alert(`Created ${resp?.length || 0} cards`); })(); }} className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md">Create Card</button>
-                                 <button onClick={(e) => { e.stopPropagation(); (async () => { const vs = await import('../services/vocabService'); await vs.vocabService.invalidateWordCache((word as any).id); alert('Cache invalidated'); })(); }} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md">Invalidate Cache</button>
+                                 <button onClick={(e) => { e.stopPropagation(); handleAssignToDeck([word.id]); }} className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md">Add to Deck</button>
                              </div>
                            </div>
                          </div>
@@ -311,5 +407,6 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
         )}
       </div>
     </div>
+    </>
   );
 };

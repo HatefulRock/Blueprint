@@ -81,31 +81,66 @@ export const userService = {
 
   // Protected user/profile calls (require Authorization header)
   getProfile: () => api.get(`/users/me`),
-  getUser: (id: number) => api.get(`/users/${id}`),
-  checkIn: (id: number) => api.post(`/users/${id}/check-in`),
-  getProgress: (id: number) => api.get(`/users/${id}/progress`),
+  getStats: () => api.get(`/users/stats`),
+  checkIn: () => api.post(`/users/check-in`),
+  getProgress: () => api.get(`/users/progress`),
 
   // Language management
-  addUserLanguage: (userId: number, payload: { code: string; name: string }) =>
-    api.post(`/users/${userId}/languages`, payload),
-  removeUserLanguage: (userId: number, code: string) =>
-    api.delete(`/users/${userId}/languages/${encodeURIComponent(code)}`),
-  setDefaultLanguage: (userId: number, code: string) =>
-    api.post(`/users/${userId}/default-language`, { code }),
+  addUserLanguage: (payload: { code: string; name: string }) =>
+    api.post(`/users/languages`, payload),
+  removeUserLanguage: (code: string) =>
+    api.delete(`/users/languages/${encodeURIComponent(code)}`),
+  setDefaultLanguage: (code: string) =>
+    api.post(`/users/default-language`, { code }),
 
   // Settings persistence
-  getSettings: (userId: number) => api.get(`/users/${userId}/settings`),
-  updateSettings: (userId: number, payload: any) => api.post(`/users/${userId}/settings`, payload),
-  updateReaderSettings: (userId: number, payload: any) => api.post(`/users/${userId}/reader-settings`, payload),
+  getSettings: () => api.get(`/users/settings`),
+  updateSettings: (payload: any) => api.post(`/users/settings`, payload),
+  updateReaderSettings: (payload: any) => api.post(`/users/reader-settings`, payload),
+};
+
+export const templateService = {
+  getTemplates: async () => {
+    const res = await api.get(`/templates/`);
+    return res as any;
+  },
+  createTemplate: async (templateData: any) => {
+    const res = await api.post(`/templates/`, templateData);
+    return res as any;
+  },
+  updateTemplate: async (templateId: number, templateData: any) => {
+    const res = await api.patch(`/templates/${templateId}`, templateData);
+    return res as any;
+  },
+  deleteTemplate: async (templateId: number) => {
+    const res = await api.delete(`/templates/${templateId}`);
+    return res as any;
+  },
+  previewTemplate: async (templateId: number) => {
+    const res = await api.get(`/templates/${templateId}/preview`);
+    return res as any;
+  },
 };
 
 export const wordService = {
+  getAllWords: async () => {
+    const res = await api.get(`/words/`);
+    return res as any;
+  },
   getWordsByDeck: async (deckId: number) => {
     const res = await api.get(`/words/deck/${deckId}`);
     return res as any;
   },
   addWord: async (wordData: any) => {
     const res = await api.post("/words/", wordData);
+    return res as any;
+  },
+  deleteWord: async (wordId: number) => {
+    const res = await api.delete(`/words/${wordId}`);
+    return res as any;
+  },
+  updateWord: async (wordId: number, data: any) => {
+    const res = await api.patch(`/words/${wordId}`, data);
     return res as any;
   },
   reviewWord: async (wordId: number, rating: number) => {
@@ -118,12 +153,18 @@ export const wordService = {
     return res as any;
   },
   // Decks
-  getDecks: async (userId: number) => {
-    const res = await api.get(`/words/decks/${userId}`);
+  getDecks: async () => {
+    const res = await api.get(`/words/decks`);
     return res as any;
   },
   createDeck: async (payload: any) => {
-    const res = await api.post(`/words/decks`, payload);
+    // Remove user_id from payload as it will come from current_user
+    const { user_id, ...rest } = payload;
+    const res = await api.post(`/words/decks`, rest);
+    return res as any;
+  },
+  updateDeck: async (deckId: number, payload: any) => {
+    const res = await api.patch(`/words/decks/${deckId}`, payload);
     return res as any;
   },
   // Study session
@@ -160,8 +201,8 @@ export const wordService = {
     const res = await api.post(`/words/cards/bulk_from_words`, { word_ids: wordIds, template_id: templateId, deck_id: deckId });
     return res as any;
   },
-  getTemplates: async (userId: number) => {
-    const res = await api.get(`/words/templates/${userId}`);
+  getTemplates: async () => {
+    const res = await api.get(`/words/templates`);
     return res as any;
   },
   createTemplate: async (data: any) => {
@@ -171,8 +212,12 @@ export const wordService = {
 };
 
 export const aiService = {
-  analyzeText: (text: string, lang: string) =>
-    api.post("/ai/analyze", { text, target_language: lang }),
+  analyzeText: (text: string, lang: string, contextSentence?: string) =>
+    api.post("/ai/analyze", {
+      text,
+      target_language: lang,
+      context_sentence: contextSentence
+    }),
 
   textToSpeech: (text: string, lang: string) =>
     api.post("/ai/tts", { text, language: lang }),
@@ -187,24 +232,65 @@ export const aiService = {
 };
 
 export const dashboardService = {
-  getDashboard: (userId: number) => api.get(`/users/${userId}/dashboard`),
+  getDashboard: () => api.get(`/users/dashboard`),
 };
 
 export const contentService = {
   // Import from URL (Scraper)
-  importUrl: (url: string, userId: number) =>
-    api.post("/content/import", { url, user_id: userId }),
+  importUrl: (url: string, targetLanguage?: string) =>
+    api.post("/content/import", { url, target_language: targetLanguage }),
 
   // Get all saved articles
-  getUserContent: (userId: number) => api.get(`/content/user/${userId}`),
+  getUserContent: () => api.get(`/content/`),
 
   // Save manually pasted text
-  saveManualContent: (title: string, content: string, userId: number) =>
-    api.post("/content/", { title, content, user_id: userId }),
+  saveManualContent: (title: string, content: string) =>
+    api.post("/content/", { title, content }),
 
   deleteContent: (contentId: number) => {
     return api.delete(`/content/${contentId}`);
   },
+};
+
+export const grammarService = {
+  // Generate exercises from text
+  generateExercises: (payload: any) =>
+    api.post("/grammar/generate", payload),
+
+  // Get all exercise sets
+  getExerciseSets: () => api.get("/grammar/sets"),
+
+  // Get specific exercise set with exercises
+  getExerciseSet: (setId: number) => api.get(`/grammar/sets/${setId}`),
+
+  // Check answer
+  checkAnswer: (payload: { exercise_id: number; user_answer: string }) =>
+    api.post("/grammar/check", payload),
+
+  // Delete exercise set
+  deleteExerciseSet: (setId: number) => api.delete(`/grammar/sets/${setId}`),
+
+  // Get progress for exercise set
+  getProgress: (setId: number) => api.get(`/grammar/sets/${setId}/progress`),
+};
+
+export const analyticsService = {
+  // Get comprehensive progress insights
+  getProgressInsights: (days: number = 30) =>
+    api.get("/analytics/progress", { params: { days } }),
+
+  // Get weak areas analysis
+  getWeakAreas: () => api.get("/analytics/weak-areas"),
+
+  // Get activity heatmap data
+  getActivityHeatmap: (days: number = 90) =>
+    api.get("/analytics/heatmap", { params: { days } }),
+
+  // Get practice statistics (legacy endpoint)
+  getPracticeStats: (userId: number, dateFrom?: string, dateTo?: string) =>
+    api.get("/analytics/practice", {
+      params: { user_id: userId, date_from: dateFrom, date_to: dateTo },
+    }),
 };
 
 export default api;

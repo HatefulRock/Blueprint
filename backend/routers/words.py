@@ -2,13 +2,25 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime, timedelta
+from ..services.auth import get_current_user
 from ..services.database import get_db
+from ..services.card_service import CardService
 from .. import models, schemas
 
 router = APIRouter(prefix="/words", tags=["words"])
 
 # --- Flashcards endpoints (Cards, Templates, Decks) ---
 from fastapi import Body
+
+
+def verify_deck_ownership(deck_id: int, user_id: int, db: Session):
+    """Verify that a deck belongs to the current user."""
+    deck = db.query(models.Deck).filter(models.Deck.id == deck_id).first()
+    if not deck:
+        raise HTTPException(status_code=404, detail="Deck not found")
+    if deck.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return deck
 
 
 @router.post("/cards", response_model=schemas.CardRead)
@@ -30,53 +42,12 @@ def create_card_from_word(
     word_id: int, template_id: int | None = None, db: Session = Depends(get_db)
 ):
     """Create a Card by rendering a template against an existing Word record using Jinja2."""
-    from jinja2 import Template
-
     word = db.query(models.Word).filter(models.Word.id == word_id).first()
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
 
-    template = None
-    if template_id:
-        template = (
-            db.query(models.CardTemplate)
-            .filter(models.CardTemplate.id == template_id)
-            .first()
-        )
-    if not template:
-        # fallback to a global Basic template
-        template = (
-            db.query(models.CardTemplate)
-            .filter(
-                models.CardTemplate.name == "Basic", models.CardTemplate.user_id == None
-            )
-            .first()
-        )
-
-    context = {
-        "term": word.term,
-        "translation": word.translation,
-        "context": word.context,
-        "part_of_speech": word.part_of_speech,
-        "literal_translation": word.literal_translation,
-    }
-
-    front = (
-        Template(template.front_template).render(**context) if template else word.term
-    )
-    back = (
-        Template(template.back_template).render(**context)
-        if template
-        else (word.translation or "")
-    )
-
-    new_card = models.Card(
-        deck_id=word.deck_id,
-        template_id=template.id if template else None,
-        front=front,
-        back=back,
-        word_id=word.id,
-    )
+    # Use CardService to create the card
+    new_card = CardService.create_card_from_word(db, word, template_id)
     db.add(new_card)
     db.commit()
     db.refresh(new_card)
@@ -98,60 +69,8 @@ def bulk_create_cards_from_deck(
     deck_id: int, template_id: int | None = None, db: Session = Depends(get_db)
 ):
     """Create cards for all words in a deck using the specified template (or default). Returns created cards."""
-    from jinja2 import Template
-
-    words = db.query(models.Word).filter(models.Word.deck_id == deck_id).all()
-    if not words:
-        return []
-
-    template = None
-    if template_id:
-        template = (
-            db.query(models.CardTemplate)
-            .filter(models.CardTemplate.id == template_id)
-            .first()
-        )
-    if not template:
-        template = (
-            db.query(models.CardTemplate)
-            .filter(
-                models.CardTemplate.name == "Basic", models.CardTemplate.user_id == None
-            )
-            .first()
-        )
-
-    created = []
-    for w in words:
-        context = {
-            "term": w.term,
-            "translation": w.translation,
-            "context": w.context,
-            "part_of_speech": w.part_of_speech,
-            "literal_translation": w.literal_translation,
-        }
-        front = (
-            Template(template.front_template).render(**context) if template else w.term
-        )
-        back = (
-            Template(template.back_template).render(**context)
-            if template
-            else (w.translation or "")
-        )
-        card = models.Card(
-            deck_id=deck_id,
-            template_id=template.id if template else None,
-            front=front,
-            back=back,
-            word_id=w.id,
-        )
-        db.add(card)
-        created.append(card)
-
-    db.commit()
-    # refresh created cards
-    for c in created:
-        db.refresh(c)
-    return created
+    # Use CardService to create cards for entire deck
+    return CardService.bulk_create_cards_for_deck(db, deck_id, template_id, commit=True)
 
 
 @router.post("/cards/bulk_from_words", response_model=List[schemas.CardRead])
@@ -167,58 +86,18 @@ def bulk_create_cards_from_word_ids(payload: dict, db: Session = Depends(get_db)
     if not word_ids:
         return []
 
-    from jinja2 import Template
+    # Convert to integers
+    word_ids = [int(wid) for wid in word_ids]
+    template_id = int(template_id) if template_id else None
 
-    template = None
-    if template_id:
-        template = (
-            db.query(models.CardTemplate)
-            .filter(models.CardTemplate.id == int(template_id))
-            .first()
-        )
-    if not template:
-        template = (
-            db.query(models.CardTemplate)
-            .filter(
-                models.CardTemplate.name == "Basic", models.CardTemplate.user_id == None
-            )
-            .first()
-        )
-
-    created = []
-    for wid in word_ids:
-        w = db.query(models.Word).filter(models.Word.id == int(wid)).first()
-        if not w:
-            continue
-        context = {
-            "term": w.term,
-            "translation": w.translation,
-            "context": w.context,
-            "part_of_speech": w.part_of_speech,
-            "literal_translation": w.literal_translation,
-        }
-        front = (
-            Template(template.front_template).render(**context) if template else w.term
-        )
-        back = (
-            Template(template.back_template).render(**context)
-            if template
-            else (w.translation or "")
-        )
-        card = models.Card(
-            deck_id=deck_id or w.deck_id,
-            template_id=template.id if template else None,
-            front=front,
-            back=back,
-            word_id=w.id,
-        )
-        db.add(card)
-        created.append(card)
-
-    db.commit()
-    for c in created:
-        db.refresh(c)
-    return created
+    # Use CardService to create cards (fixes N+1 query problem)
+    return CardService.bulk_create_cards_from_word_ids(
+        db=db,
+        word_ids=word_ids,
+        template_id=template_id,
+        deck_id_override=deck_id,
+        commit=True
+    )
 
 
 @router.post("/templates", response_model=schemas.CardTemplateRead)
@@ -242,9 +121,12 @@ def get_templates(user_id: int, db: Session = Depends(get_db)):
     )
 
 
-@router.get("/decks/{user_id}", response_model=List[schemas.DeckRead])
-def get_user_decks(user_id: int, db: Session = Depends(get_db)):
-    return db.query(models.Deck).filter(models.Deck.user_id == user_id).all()
+@router.get("/decks", response_model=List[schemas.DeckRead])
+def get_user_decks(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return db.query(models.Deck).filter(models.Deck.user_id == current_user.id).all()
 
 
 @router.get("/cards/due/{deck_id}", response_model=List[schemas.CardRead])
@@ -367,12 +249,37 @@ def init_default_templates(db: Session = Depends(get_db)):
 
 
 @router.post("/", response_model=schemas.WordRead)
-def add_word(word_data: schemas.WordCreate, db: Session = Depends(get_db)):
+def add_word(
+    word_data: schemas.WordCreate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # If no deck_id provided, get or create user's default deck
+    deck_id = word_data.deck_id
+    if not deck_id:
+        # Find user's first deck or create a default one
+        default_deck = db.query(models.Deck).filter(
+            models.Deck.user_id == current_user.id
+        ).first()
+
+        if not default_deck:
+            # Create a default deck for the user
+            default_deck = models.Deck(
+                user_id=current_user.id,
+                name="My Vocabulary",
+                language="Default"
+            )
+            db.add(default_deck)
+            db.commit()
+            db.refresh(default_deck)
+
+        deck_id = default_deck.id
+
     # Check if word already exists in this deck to avoid duplicates
     existing_word = (
         db.query(models.Word)
         .filter(
-            models.Word.term == word_data.term, models.Word.deck_id == word_data.deck_id
+            models.Word.term == word_data.term, models.Word.deck_id == deck_id
         )
         .first()
     )
@@ -380,11 +287,34 @@ def add_word(word_data: schemas.WordCreate, db: Session = Depends(get_db)):
     if existing_word:
         return existing_word
 
-    new_word = models.Word(**word_data.dict())
+    # Create the word with the determined deck_id
+    word_dict = word_data.dict()
+    word_dict['deck_id'] = deck_id
+    new_word = models.Word(**word_dict)
     db.add(new_word)
     db.commit()
     db.refresh(new_word)
     return new_word
+
+
+@router.get("/", response_model=List[schemas.WordRead])
+def get_all_user_words(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all words across all decks for the current user."""
+    # Get all deck IDs for the current user
+    user_deck_ids = [deck.id for deck in db.query(models.Deck).filter(
+        models.Deck.user_id == current_user.id
+    ).all()]
+
+    # Fetch all words from those decks
+    if not user_deck_ids:
+        return []
+
+    return db.query(models.Word).filter(
+        models.Word.deck_id.in_(user_deck_ids)
+    ).all()
 
 
 @router.get("/deck/{deck_id}", response_model=List[schemas.WordRead])
@@ -441,6 +371,31 @@ def review_word(word_id: int, rating: int, db: Session = Depends(get_db)):
     return {"message": "SRS updated", "next_review": word.next_review_date}
 
 
+@router.patch("/{word_id}")
+def update_word(
+    word_id: int,
+    update_data: dict,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update word properties (e.g., deck_id, translation, etc.)"""
+    word = db.query(models.Word).filter(models.Word.id == word_id).first()
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+
+    # Update allowed fields
+    allowed_fields = ['deck_id', 'translation', 'context', 'part_of_speech',
+                      'grammatical_breakdown', 'literal_translation', 'status']
+
+    for field, value in update_data.items():
+        if field in allowed_fields and hasattr(word, field):
+            setattr(word, field, value)
+
+    db.commit()
+    db.refresh(word)
+    return word
+
+
 @router.delete("/{word_id}")
 def delete_word(word_id: int, db: Session = Depends(get_db)):
     word = db.query(models.Word).filter(models.Word.id == word_id).first()
@@ -451,21 +406,83 @@ def delete_word(word_id: int, db: Session = Depends(get_db)):
     return {"message": "Word deleted"}
 
 
+@router.post("/{word_id}/mark-known")
+def mark_word_as_known(
+    word_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Mark a word as already known (skip SRS, set max familiarity)."""
+    word = db.query(models.Word).filter(models.Word.id == word_id).first()
+
+    if not word:
+        raise HTTPException(status_code=404, detail="Word not found")
+
+    # Verify the word belongs to a deck owned by the current user
+    deck = db.query(models.Deck).filter(models.Deck.id == word.deck_id).first()
+    if not deck or deck.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Mark word as known
+    word.status = "learned"  # or "known" if you have that status
+    word.familiarity_score = 10  # Max score
+    word.last_reviewed_date = datetime.utcnow()
+    word.next_review_date = datetime.utcnow() + timedelta(days=365)  # Review in a year
+
+    db.commit()
+    db.refresh(word)
+
+    return {"success": True, "message": "Word marked as known", "word": word}
+
+
 from fastapi import Body
 
 
 @router.post("/decks")
-def create_deck(payload: dict = Body(...), db: Session = Depends(get_db)):
+def create_deck(
+    payload: dict = Body(...),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     name = payload.get("name")
     language = payload.get("language")
-    user_id = payload.get("user_id", 1)
-    new_deck = models.Deck(name=name, language=language, user_id=user_id)
+    default_template_id = payload.get("default_template_id")
+    new_deck = models.Deck(
+        name=name,
+        language=language,
+        user_id=current_user.id,
+        default_template_id=default_template_id
+    )
     db.add(new_deck)
     db.commit()
     db.refresh(new_deck)
     return new_deck
 
 
-@router.get("/decks/{user_id}")
-def get_user_decks(user_id: int, db: Session = Depends(get_db)):
-    return db.query(models.Deck).filter(models.Deck.user_id == user_id).all()
+@router.patch("/decks/{deck_id}")
+def update_deck(
+    deck_id: int,
+    payload: dict = Body(...),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update deck properties like name, language, or default template."""
+    deck = db.query(models.Deck).filter(models.Deck.id == deck_id).first()
+    if not deck:
+        raise HTTPException(status_code=404, detail="Deck not found")
+
+    # Check ownership
+    if deck.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this deck")
+
+    # Update fields if provided
+    if "name" in payload:
+        deck.name = payload["name"]
+    if "language" in payload:
+        deck.language = payload["language"]
+    if "default_template_id" in payload:
+        deck.default_template_id = payload["default_template_id"]
+
+    db.commit()
+    db.refresh(deck)
+    return deck

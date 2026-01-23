@@ -9,3 +9,7 @@ beautifulsoup4==4.12.2
 pypdf==3.17.0
 gtts
 pypdf
+python-jose[cryptography]==3.3.0
+passlib==1.7.4
+bcrypt==4.0.1
+langdetect==1.0.9

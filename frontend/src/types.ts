@@ -1,19 +1,24 @@
-
+// Backend Word model (matches backend schema with snake_case)
 export interface Word {
-  id?: number;
+  id: number;
   term: string;
-  context: string;
-  familiarityScore: number; // 1-5 scale
-  language: string; // e.g., 'Spanish', 'French'
-  deckId?: number; // Optional link to a specific deck
-  analysis: { // The saved analysis must be complete
-    translation: string;
-    literalTranslation: string;
-    grammaticalBreakdown: string;
-  };
-  imageUrl?: string; // Optional URL for AI-generated mnemonic image
-  nextReviewDate?: string; // ISO date string for SRS
-  lastReviewedDate?: string; // ISO date string
+  context: string | null;
+  translation: string | null;
+  part_of_speech: string | null;
+  grammatical_breakdown: string | null;
+  literal_translation: string | null;
+  deck_id: number;
+  reading_content_id: number | null;
+  encounters: number;
+  status: string; // "new" | "seen" | "learned"
+  familiarity_score: number;
+  next_review_date: string; // ISO datetime string
+  last_reviewed_date: string | null; // ISO datetime string
+}
+
+export interface UsageExample {
+  example: string;
+  translation: string;
 }
 
 export interface AnalysisResult {
@@ -26,6 +31,11 @@ export interface AnalysisResult {
     translation: string;
     partOfSpeech: string;
   }>;
+  difficultyLevel?: string;
+  usageExamples?: UsageExample[];
+  memoryAid?: string;
+  relatedWords?: string[];
+  contextSentence?: string;
 }
 
 export interface GrammarCheckResult {
@@ -52,6 +62,10 @@ export enum View {
   Conversation = 'conversation',
   Dashboard = 'dashboard',
   Practice = 'practice',
+  Pronunciation = 'pronunciation',
+  Writing = 'writing',
+  Grammar = 'grammar',
+  Analytics = 'analytics',
   // Leaderboard = 'leaderboard',
   ReadingSession = 'reading_session',
   Settings = 'settings',
@@ -61,6 +75,7 @@ export enum View {
 export interface Selection {
   text: string;
   type: 'word' | 'sentence';
+  contextSentence?: string;
 }
 
 export interface PronunciationFeedback {
@@ -127,11 +142,58 @@ export interface Exercise {
   type: ExerciseType;
 }
 
+// Backend Deck model (matches backend schema)
 export interface Deck {
   id: number;
+  user_id: number;
   name: string;
   language: string;
-  wordCount: number;
+}
+
+// Backend Card model (matches backend schema)
+export interface Card {
+  id: number;
+  deck_id: number;
+  template_id: number | null;
+  front: string;
+  back: string;
+  word_id: number | null;
+  repetition: number;
+  easiness_factor: number;
+  interval: number;
+  next_review_date: string;
+  last_reviewed_date: string | null;
+}
+
+// Backend WordContext model (matches backend schema)
+export interface WordContext {
+  id: number;
+  word_id: number;
+  reading_content_id: number | null;
+  sentence: string;
+  created_at: string;
+}
+
+// Backend ReadingContent model (matches backend schema)
+export interface ReadingContent {
+  id: number;
+  title: string;
+  content: string;
+  source_url: string | null;
+  difficulty_score: string | null;
+  created_at: string;
+}
+
+// API response for vocab capture
+export interface VocabCaptureResponse {
+  action: "created" | "updated";
+  word: Word;
+}
+
+// API response for word detail
+export interface VocabWordDetailResponse {
+  word: Word;
+  contexts: WordContext[];
 }
 
 
@@ -157,4 +219,56 @@ export interface StudyPlan {
 export interface LanguageOption {
     code: string;
     name: string;
+}
+
+// Grammar Exercise types
+export type GrammarExerciseType = 'fill_blank' | 'transformation' | 'multiple_choice' | 'correction';
+
+export interface GrammarExercise {
+  id: number;
+  exercise_set_id: number;
+  exercise_type: GrammarExerciseType;
+  question: string;
+  correct_answer: string;
+  options: string | null; // JSON string array for multiple choice
+  explanation: string | null;
+  grammar_point: string | null;
+  attempts: number;
+  correct_attempts: number;
+  last_attempted: string | null;
+  created_at: string;
+}
+
+export interface GrammarExerciseSet {
+  id: number;
+  user_id: number;
+  reading_content_id: number | null;
+  title: string;
+  language: string;
+  difficulty_level: string | null;
+  source_text: string | null;
+  total_exercises: number;
+  completed_exercises: number;
+  created_at: string;
+  exercises: GrammarExercise[];
+}
+
+export interface GenerateExercisesRequest {
+  text: string;
+  language: string;
+  difficulty_level?: string;
+  exercise_types?: GrammarExerciseType[];
+  num_exercises?: number;
+}
+
+export interface CheckAnswerRequest {
+  exercise_id: number;
+  user_answer: string;
+}
+
+export interface CheckAnswerResponse {
+  is_correct: boolean;
+  correct_answer: string;
+  explanation: string;
+  user_answer: string;
 }
