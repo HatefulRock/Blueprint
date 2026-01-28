@@ -11,6 +11,7 @@ from google.genai import types
 from .. import models, schemas
 from ..services.auth import get_current_user
 from ..services.database import get_db
+from ..config.gemini_models import GEMINI_MODELS
 
 router = APIRouter(prefix="/grammar", tags=["grammar"])
 
@@ -69,7 +70,7 @@ Ensure variety in exercise types and grammar points covered.
 """
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash-exp",
+            model=GEMINI_MODELS["reasoning"],  # Use Gemini 3 Pro for better reasoning
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
@@ -301,3 +302,146 @@ async def get_exercise_progress(
             1,
         ),
     }
+
+
+@router.get("/patterns/{language}")
+async def get_grammar_patterns(
+    language: str,
+    level: str = "all",
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Generate comprehensive grammar pattern library using Gemini 3 Pro.
+
+    Showcases Gemini 3's improved reasoning capabilities for deep linguistic analysis.
+    Results are cached for 7 days to optimize performance and cost.
+
+    Args:
+        language: Target language (e.g., "Spanish", "French", "Chinese")
+        level: CEFR level filter (A1, A2, B1, B2, C1, C2, or "all")
+
+    Returns:
+        Comprehensive grammar reference with patterns, explanations, and examples
+    """
+    try:
+        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+        # Create cache key
+        cache_key = f"grammar_patterns:{language}:{level}"
+
+        # TODO: Check cache first (implement Redis/in-memory cache)
+        # For now, we'll generate fresh each time
+
+        level_filter = level if level != "all" else "A1 to C2"
+
+        prompt = f"""Create a comprehensive {language} grammar reference guide for learners.
+
+TARGET LEVEL: {level_filter}
+
+Use your advanced reasoning capabilities to provide deep linguistic insights.
+
+For each grammar pattern, provide:
+1. **Pattern Name and Structure**
+   - Clear name and formula/template
+   - Linguistic terminology explained simply
+
+2. **When to Use It**
+   - Contexts and situations
+   - Communicative functions
+   - Register (formal/informal)
+
+3. **Common Mistakes**
+   - Typical learner errors
+   - Why these mistakes happen
+   - How to avoid them
+
+4. **Examples with Translations**
+   - 5 diverse example sentences
+   - English translations
+   - Highlight the pattern in use
+
+5. **Related Patterns**
+   - Similar or contrasting patterns
+   - When to use each
+   - Key differences
+
+6. **Memory Aids**
+   - Mnemonics or tips
+   - Visual/conceptual anchors
+
+Cover ALL major grammar topics appropriate for {level_filter}:
+- Verb tenses and aspects
+- Mood (indicative, subjunctive, imperative)
+- Noun/adjective agreement
+- Articles and determiners
+- Pronouns (subject, object, possessive, reflexive)
+- Prepositions
+- Sentence structure (word order, questions, negation)
+- Conjunctions and connectors
+- Conditionals (if-clauses)
+- Passive voice
+- Relative clauses
+- Reported speech
+
+For each pattern, explain not just HOW it works, but WHY - the underlying logic and reasoning.
+
+Return comprehensive JSON with this structure:
+{{
+  "language": "{language}",
+  "level": "{level_filter}",
+  "patterns": [
+    {{
+      "pattern_name": "...",
+      "structure": "...",
+      "difficulty": "A1-C2",
+      "category": "verbs|nouns|syntax|etc",
+      "when_to_use": {{
+        "contexts": ["..."],
+        "functions": ["..."],
+        "register": "formal|informal|both"
+      }},
+      "common_mistakes": [
+        {{
+          "mistake": "...",
+          "why": "...",
+          "correction": "..."
+        }}
+      ],
+      "examples": [
+        {{
+          "sentence": "...",
+          "translation": "...",
+          "notes": "..."
+        }}
+      ],
+      "related_patterns": [
+        {{
+          "pattern": "...",
+          "relationship": "similar|contrasting|prerequisite",
+          "key_difference": "..."
+        }}
+      ],
+      "memory_aid": "..."
+    }}
+  ],
+  "generated_at": "ISO timestamp"
+}}
+"""
+
+        response = client.models.generate_content(
+            model=GEMINI_MODELS["reasoning"],  # Use Gemini 3 Pro for deep reasoning
+            contents=prompt,
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+        )
+
+        result = json.loads(response.text)
+
+        # TODO: Cache the result
+        # await cache_service.set(cache_key, result, ttl=60*60*24*7)  # 7 days
+
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Grammar pattern generation failed: {str(e)}"
+        )

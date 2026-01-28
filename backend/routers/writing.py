@@ -7,6 +7,7 @@ from .. import models, schemas
 from ..services.auth import get_current_user
 from ..services.database import get_db
 from ..services.gemini import GeminiService
+from ..config.gemini_models import GEMINI_MODELS
 
 router = APIRouter(prefix="/writing", tags=["writing"])
 
@@ -52,7 +53,7 @@ If there are no errors, return corrections as an empty array and corrected_text 
 """
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash-exp",
+            model=GEMINI_MODELS["default"],
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
@@ -111,7 +112,7 @@ Be constructive, specific, and encouraging. Tailor feedback to a language learne
 """
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash-exp",
+            model=GEMINI_MODELS["reasoning"],  # Use Gemini 3 Pro for comprehensive feedback
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json"),
         )

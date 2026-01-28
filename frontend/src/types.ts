@@ -1,14 +1,14 @@
 // Backend Word model (matches backend schema with snake_case)
 export interface Word {
-  id: number;
+  id: string;
   term: string;
   context: string | null;
   translation: string | null;
   part_of_speech: string | null;
   grammatical_breakdown: string | null;
   literal_translation: string | null;
-  deck_id: number;
-  reading_content_id: number | null;
+  deck_id: string;
+  reading_content_id: string | null;
   encounters: number;
   status: string; // "new" | "seen" | "learned"
   familiarity_score: number;
@@ -70,6 +70,11 @@ export enum View {
   ReadingSession = 'reading_session',
   Settings = 'settings',
   // Profile = 'profile',
+
+  // Gemini 3 Showcase Features
+  Showcase = 'showcase',
+  VideoLearning = 'video_learning',
+  DeepReading = 'deep_reading',
 }
 
 export interface Selection {
@@ -91,7 +96,7 @@ export interface PronunciationFeedback {
 }
 
 export interface TranscriptMessage {
-  id: number;
+  id: string;
   author: 'user' | 'ai' | string;
   text: string;
   feedback?: PronunciationFeedback;
@@ -144,20 +149,23 @@ export interface Exercise {
 
 // Backend Deck model (matches backend schema)
 export interface Deck {
-  id: number;
-  user_id: number;
+  id: string;
+  user_id: string;
   name: string;
   language: string;
+  default_template_id: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // Backend Card model (matches backend schema)
 export interface Card {
-  id: number;
-  deck_id: number;
-  template_id: number | null;
+  id: string;
+  deck_id: string;
+  template_id: string | null;
   front: string;
   back: string;
-  word_id: number | null;
+  word_id: string | null;
   repetition: number;
   easiness_factor: number;
   interval: number;
@@ -167,16 +175,16 @@ export interface Card {
 
 // Backend WordContext model (matches backend schema)
 export interface WordContext {
-  id: number;
-  word_id: number;
-  reading_content_id: number | null;
+  id: string;
+  word_id: string;
+  reading_content_id: string | null;
   sentence: string;
   created_at: string;
 }
 
 // Backend ReadingContent model (matches backend schema)
 export interface ReadingContent {
-  id: number;
+  id: string;
   title: string;
   content: string;
   source_url: string | null;
@@ -225,8 +233,8 @@ export interface LanguageOption {
 export type GrammarExerciseType = 'fill_blank' | 'transformation' | 'multiple_choice' | 'correction';
 
 export interface GrammarExercise {
-  id: number;
-  exercise_set_id: number;
+  id: string;
+  exercise_set_id: string;
   exercise_type: GrammarExerciseType;
   question: string;
   correct_answer: string;
@@ -240,9 +248,9 @@ export interface GrammarExercise {
 }
 
 export interface GrammarExerciseSet {
-  id: number;
-  user_id: number;
-  reading_content_id: number | null;
+  id: string;
+  user_id: string;
+  reading_content_id: string | null;
   title: string;
   language: string;
   difficulty_level: string | null;
@@ -262,7 +270,7 @@ export interface GenerateExercisesRequest {
 }
 
 export interface CheckAnswerRequest {
-  exercise_id: number;
+  exercise_id: string;
   user_answer: string;
 }
 

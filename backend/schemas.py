@@ -1,7 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import date, datetime
-
+from uuid import UUID
 
 class UserBase(BaseModel):
     username: str
@@ -12,7 +12,7 @@ class UserCreate(UserBase):
 
 
 class UserRead(UserBase):
-    id: int
+    id: UUID  
     points: int
     streak: int
     new_words_this_week: int
@@ -37,17 +37,17 @@ class UserLogin(BaseModel):
 class Token(BaseModel):
     token: str
     token_type: str = "bearer"
-    id: int
+    id: UUID  
     username: str
 
 
 class TokenData(BaseModel):
-    user_id: Optional[int] = None
+    user_id: Optional[UUID] = None
     username: Optional[str] = None
 
 
 class UserMe(BaseModel):
-    id: int
+    id: UUID
     username: str
     email: Optional[str] = None
     points: int
@@ -69,10 +69,10 @@ class WordBase(BaseModel):
     part_of_speech: Optional[str] = None
     grammatical_breakdown: Optional[str] = None
     literal_translation: Optional[str] = None
-    deck_id: Optional[int] = None
+    deck_id: Optional[UUID] = None
 
     # New fields for phased rollout
-    reading_content_id: Optional[int] = None
+    reading_content_id: Optional[UUID] = None
     encounters: Optional[int] = 0
     status: Optional[str] = "new"
 
@@ -87,7 +87,7 @@ class WordUpdate(BaseModel):
 
 
 class WordRead(WordBase):
-    id: int
+    id: UUID
     familiarity_score: int
     next_review_date: datetime
     last_reviewed_date: Optional[datetime] = None
@@ -97,9 +97,9 @@ class WordRead(WordBase):
 
 
 class WordContextRead(BaseModel):
-    id: int
-    word_id: int
-    reading_content_id: Optional[int] = None
+    id: UUID
+    word_id: UUID
+    reading_content_id: Optional[UUID] = None
     sentence: str
     created_at: datetime
 
@@ -114,17 +114,17 @@ class ContentBase(BaseModel):
 
 
 class ContentCreate(ContentBase):
-    user_id: Optional[int] = None
+    user_id: Optional[UUID] = None
 
 
 class ContentImport(BaseModel):
     url: str
-    user_id: Optional[int] = None
+    user_id: Optional[UUID] = None
     target_language: Optional[str] = None
 
 
 class ContentRead(ContentBase):
-    id: int
+    id: UUID
     difficulty_score: Optional[str] = None
     created_at: datetime
 
@@ -141,7 +141,7 @@ class CardTemplateBase(BaseModel):
 
 
 class CardTemplateCreate(CardTemplateBase):
-    user_id: Optional[int] = None
+    user_id: Optional[UUID] = None
 
 
 class CardTemplateUpdate(BaseModel):
@@ -152,8 +152,8 @@ class CardTemplateUpdate(BaseModel):
 
 
 class CardTemplateRead(CardTemplateBase):
-    id: int
-    user_id: Optional[int] = None
+    id: UUID
+    user_id: Optional[UUID] = None
     created_at: datetime
 
     class Config:
@@ -161,8 +161,8 @@ class CardTemplateRead(CardTemplateBase):
 
 
 class CardBase(BaseModel):
-    deck_id: int
-    template_id: Optional[int] = None
+    deck_id: UUID
+    template_id: Optional[UUID] = None
     front: str
     back: str
 
@@ -172,24 +172,24 @@ class CardCreate(CardBase):
 
 
 class CardRead(CardBase):
-    id: int
+    id: UUID
     repetition: int
     easiness_factor: float
     interval: int
     next_review_date: datetime
     last_reviewed_date: Optional[datetime] = None
-    word_id: Optional[int] = None
+    word_id: Optional[UUID] = None
 
     class Config:
         orm_mode = True
 
 
 class DeckRead(BaseModel):
-    id: int
-    user_id: int
+    id: UUID
+    user_id: UUID
     name: str
     language: str
-    default_template_id: Optional[int] = None
+    default_template_id: Optional[UUID] = None
 
     class Config:
         orm_mode = True
@@ -197,7 +197,7 @@ class DeckRead(BaseModel):
 
 class CardReviewRequest(BaseModel):
     rating: int  # 0-5 quality rating as SM-2 (0 worst, 5 perfect)
-    session_id: Optional[int] = None
+    session_id: Optional[UUID] = None
 
 
 class AnalysisRequest(BaseModel):
@@ -205,22 +205,16 @@ class AnalysisRequest(BaseModel):
     target_language: str
     context_sentence: Optional[str] = None
 
-
-class UsageExample(BaseModel):
-    example: str
-    translation: str
-
-
-class AnalysisResponse(BaseModel):
-    translation: str
-    literal_translation: Optional[str] = None
-    grammar_breakdown: Optional[str] = None
-    vocabulary: Optional[List[dict]] = None  # [{term, pos, translation, pinyin}]
-    difficulty_level: Optional[str] = None
-    usage_examples: Optional[List[UsageExample]] = None
-    memory_aid: Optional[str] = None
-    related_words: Optional[List[str]] = None
-    context_sentence: Optional[str] = None
+# class AnalysisResponse(BaseModel):
+#     translation: str
+#     literal_translation: Optional[str] = None
+#     grammar_breakdown: Optional[str] = None
+#     vocabulary: Optional[List[dict]] = None  # [{term, pos, translation, pinyin}]
+#     difficulty_level: Optional[str] = None
+#     usage_examples: Optional[List[UsageExample]] = None
+#     memory_aid: Optional[str] = None
+#     related_words: Optional[List[str]] = None
+#     context_sentence: Optional[str] = None
 
 
 class ExplanationRequest(BaseModel):
@@ -235,7 +229,7 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    user_id: int
+    user_id: UUID
     text: Optional[str] = None
     scenario: str  # e.g., "At a coffee shop"
     target_language: str
@@ -257,9 +251,9 @@ class ChatResponse(BaseModel):
 # --- Vocab Capture Schema ---
 class VocabCaptureRequest(BaseModel):
     term: str
-    deck_id: Optional[int] = 1
+    deck_id: Optional[UUID] = None
     context: Optional[str] = None
-    reading_content_id: Optional[int] = None
+    reading_content_id: Optional[UUID] = None
     analysis: Optional[dict] = None
     create_card: Optional[bool] = False
 
@@ -317,8 +311,8 @@ class WritingSubmissionUpdate(BaseModel):
 
 
 class WritingSubmissionRead(BaseModel):
-    id: int
-    user_id: int
+    id: UUID
+    user_id: UUID
     title: Optional[str]
     content: str
     prompt: Optional[str]
@@ -365,8 +359,8 @@ class EssayFeedbackResponse(BaseModel):
 
 # --- Grammar Exercise Schemas ---
 class GrammarExerciseRead(BaseModel):
-    id: int
-    exercise_set_id: int
+    id: UUID
+    exercise_set_id: UUID
     exercise_type: str
     question: str
     correct_answer: str
@@ -383,9 +377,9 @@ class GrammarExerciseRead(BaseModel):
 
 
 class GrammarExerciseSetRead(BaseModel):
-    id: int
-    user_id: int
-    reading_content_id: Optional[int]
+    id: UUID
+    user_id: UUID
+    reading_content_id: Optional[UUID]
     title: str
     language: str
     difficulty_level: Optional[str]
@@ -413,7 +407,7 @@ class GenerateExercisesRequest(BaseModel):
 
 
 class CheckAnswerRequest(BaseModel):
-    exercise_id: int
+    exercise_id: UUID
     user_answer: str
 
 
@@ -422,3 +416,128 @@ class CheckAnswerResponse(BaseModel):
     correct_answer: str
     explanation: str
     user_answer: str
+
+class UsageExample(BaseModel):
+    example: str = Field(description="Sentence in the target language")
+    translation: str = Field(description="English translation of the example")
+
+class VocabularyItem(BaseModel):
+    term: str
+    pos: str = Field(description="Part of speech (e.g., noun, verb)")
+    translation: str
+    pinyin: Optional[str] = Field(None, description="Pronunciation guide if applicable (e.g. for Chinese/Japanese)")
+
+class AnalysisResponse(BaseModel):
+    """
+    Strict schema for the /analyze endpoint.
+    Gemini will fill this exact structure.
+    """
+    translation: str
+    literal_translation: str
+    grammar_breakdown: str = Field(description="Detailed explanation of grammar")
+    vocabulary: List[VocabularyItem] 
+    difficulty_level: str = Field(description="CEFR level (A1-C2)")
+    usage_examples: List[UsageExample]
+    memory_aid: Optional[str] = Field(None, description="Mnemonic or tip (only for single words)")
+    related_words: List[str] = Field(description="3-5 related terms")
+    context_sentence: Optional[str] = None # Helper field, usually not generated by AI
+
+# --- Quiz Schemas ---
+class QuizOption(BaseModel):
+    text: str
+    label: str = Field(description="A, B, C, or D")
+
+class QuizQuestion(BaseModel):
+    question: str
+    options: List[str] = Field(description="List of possible answers")
+    answer: str = Field(description="The correct answer string")
+    explanation: str
+    
+class QuizResponse(BaseModel):
+    questions: List[QuizQuestion]
+
+# --- Audio Tutor Schema ---
+class AudioTutorResponse(BaseModel):
+    transcription: str
+    reply: str = Field(description="Response in the target language")
+    feedback: str = Field(description="Feedback on pronunciation and grammar in English")
+
+class TextStats(BaseModel):
+    total_characters: int
+    total_words: int
+    estimated_reading_time_minutes: float
+
+class SummarySection(BaseModel):
+    main_theme: str
+    key_points: List[str]
+    author_purpose: str
+    tone: str
+    target_audience: str
+    overview: str = Field(description="3-5 sentence overview")
+
+class VocabAnalysisItem(BaseModel):
+    word: str
+    translation: str
+    part_of_speech: str
+    level: str = Field(description="CEFR level (A1-C2)")
+    frequency: int
+    example: str = Field(description="Example sentence from the text")
+    usefulness_reason: str
+    rank: int
+
+class GrammarPatternItem(BaseModel):
+    pattern_name: str
+    description: str
+    difficulty: str
+    examples: List[str]
+    importance: str
+
+class IdiomItem(BaseModel):
+    expression: str
+    meaning: str
+
+class CulturalContextSection(BaseModel):
+    references: List[str]
+    idioms: List[IdiomItem]
+    regional_features: Optional[str] = None
+    background_knowledge: Optional[str] = None
+
+class DifficultyProgressionSection(BaseModel):
+    beginning: str
+    middle: str
+    end: str
+    challenging_sections: List[str]
+    reading_strategy: str
+
+class DiscussionQuestion(BaseModel):
+    question: str
+    type: str = Field(description="comprehension, analysis, or synthesis")
+    suggested_vocabulary: List[str]
+
+class RelatedContentSection(BaseModel):
+    similar_texts: List[str]
+    topics: List[str]
+    authors: List[str]
+    easier_alternatives: List[str]
+    harder_alternatives: List[str]
+
+class LongContentAnalysisResponse(BaseModel):
+    text_stats: TextStats
+    summary: SummarySection
+    vocabulary: List[VocabAnalysisItem]
+    grammar_patterns: List[GrammarPatternItem]
+    cultural_context: CulturalContextSection
+    difficulty_progression: DifficultyProgressionSection
+    discussion_questions: List[DiscussionQuestion]
+    related_content: RelatedContentSection
+
+
+class BulkCardCreate(BaseModel):
+    word_ids: List[UUID]
+    template_id: Optional[UUID] = None
+    deck_id: Optional[UUID] = None
+
+class StudySessionRequest(BaseModel):
+    deck_id: UUID
+    session_date: date = Field(default_factory=date.today)
+    duration_minutes: Optional[int] = None

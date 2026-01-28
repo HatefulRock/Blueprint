@@ -3,18 +3,21 @@ import json
 import base64
 from io import BytesIO
 from dotenv import load_dotenv
+import logging
 
 from google import genai
 from google.genai import types
 from gtts import gTTS
 
+from backend import schemas
+
+from ..config.gemini_models import GEMINI_MODELS
+
+logger = logging.getLogger("gemini_service")
 load_dotenv()
 
 # Configure the SDK
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
-# Model constant
-MODEL_ID = "gemini-2.0-flash-exp"
 
 
 class GeminiService:
@@ -47,25 +50,33 @@ class GeminiService:
         - related_words: Array of 3-5 related or similar terms that would be useful to learn{context_note}
         """
 
-        response = client.models.generate_content(
-            model=MODEL_ID,
-            contents=prompt,
-            config=types.GenerateContentConfig(response_mime_type="application/json"),
-        )
         try:
-            result = json.loads(response.text)
-            # Add context_sentence to the response if it was provided
-            if context_sentence and context_sentence != text:
-                result['context_sentence'] = context_sentence
-            return result
-        except Exception:
-            return response.text
+            response = client.models.generate_content(
+                model=GEMINI_MODELS["default"],
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=schemas.AnalysisResponse 
+                    ),
+            )
+            if response.parsed:
+                result = response.parsed.model_dump()
+                if context_sentence:
+                    result['context_sentence'] = context_sentence
+                return result
+            
+            return None
+
+        except Exception as e:
+            logger.error(f"Gemini Analysis Error: {e}", exc_info=True)
+            # You might want to re-raise or return a fallback here
+            raise e
 
     @staticmethod
     async def analyze_text_stream(text: str, target_language: str):
         prompt = f"Explain the grammar and usage of '{text}' in {target_language}. Be thorough."
         response = client.models.generate_content_stream(
-            model=MODEL_ID, contents=prompt
+            model=GEMINI_MODELS["default"], contents=prompt
         )
         for chunk in response:
             if getattr(chunk, "text", None):
@@ -75,9 +86,12 @@ class GeminiService:
     def generate_practice_quiz(words: list, target_language: str):
         prompt = f"Create a 5-question quiz for a student learning {target_language}. Focus on these words: {', '.join(words)}. Return JSON array of objects {'{question, options, answer, explanation}'}"
         response = client.models.generate_content(
-            model=MODEL_ID,
+            model=GEMINI_MODELS["default"],
             contents=prompt,
-            config=types.GenerateContentConfig(response_mime_type="application/json"),
+            config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=schemas.QuizResponse
+                ),
         )
         try:
             return json.loads(response.text)
@@ -116,28 +130,20 @@ class GeminiService:
             f"Return ONLY JSON with keys: transcription, reply, feedback.\n"
             f"Previous context: {history_context}"
         )
-
-        response = client.models.generate_content(
-            model=MODEL_ID,
-            contents=[
-                prompt_text,
-                types.Part.from_bytes(data=audio_content, mime_type="audio/mp3"),
-            ],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema={
-                    "type": "OBJECT",
-                    "properties": {
-                        "transcription": {"type": "STRING"},
-                        "reply": {"type": "STRING"},
-                        "feedback": {"type": "STRING"},
-                    },
-                },
-            ),
-        )
-
         try:
-            return json.loads(response.text)
+            response = client.models.generate_content(
+                model=GEMINI_MODELS["audio"],
+                contents=[
+                    prompt_text,
+                    types.Part.from_bytes(data=audio_content, mime_type="audio/mp3"),
+                ],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=schemas.AudioTutorResponse,
+                ),
+            )
+            return response.parsed.model_dump() if response.parsed else {}
+
         except Exception:
             return {"transcription": None, "reply": response.text, "feedback": None}
 
@@ -165,18 +171,78 @@ class GeminiService:
         tutor_style: str = "Friendly",
         topic: str | None = None,
     ):
-        persona = f"You are a {tutor_style} {target_language} tutor."
-        if topic:
-            persona += f" Topic: {topic}."
+        prompt = f"""
+        Role: {tutor_style} {target_language} Tutor. 
+        Topic: {topic or scenario}.
+        User says: "{user_text}"
+        
+        Provide a reply in {target_language} and feedback in English.
+        """
 
-        prompt = f"{persona} {scenario}\nUser says: {user_text}\nReturn ONLY JSON with keys: reply, feedback"
-
-        chat = client.chats.create(model=MODEL_ID, history=history)
-        response = chat.send_message(
-            message=prompt,
-            config=types.GenerateContentConfig(response_mime_type="application/json"),
-        )
         try:
-            return json.loads(response.text)
-        except Exception:
-            return response.text
+            chat = client.chats.create(model=GEMINI_MODELS["default"], history=history)
+            
+            response = chat.send_message(
+                message=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=schemas.ChatResponse 
+                ),
+            )
+            return response.parsed.model_dump() if response.parsed else {}
+        except Exception as e:
+            logger.error(f"Chat Error: {e}")
+            return {"reply": "Error", "feedback": str(e)}
+
+    @staticmethod
+    async def analyze_long_content(
+        text: str,
+        target_language: str,
+        native_language: str = "English"
+    ) -> dict:
+        """
+        Use Gemini's extended context window to analyze entire articles/books.
+        Refactored to use Native Structured Output.
+        """
+        
+        prompt = f"""
+        Perform a COMPREHENSIVE analysis of this entire {target_language} text.
+        
+        Text Length: {len(text)} characters.
+        
+        Tasks:
+        1. **SUMMARY**: Main themes, tone, purpose.
+        2. **VOCABULARY**: Extract the 50 most valuable words ranked by usefulness (A1-C2).
+        3. **GRAMMAR**: Identify 15 distinct grammar structures used.
+        4. **CULTURE**: Explain cultural references and idioms.
+        5. **DIFFICULTY**: Map progression (beginning/middle/end).
+        6. **DISCUSSION**: 10 questions for comprehension/analysis.
+        7. **RELATED**: Suggestions for similar texts/authors.
+
+        Use the ENTIRE text context to provide deep insights.
+        """
+
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODELS["reasoning"], 
+                contents=[prompt, text],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=schemas.LongContentAnalysisResponse # <--- The Schema
+                ),
+            )
+
+            if response.parsed:
+                return response.parsed.model_dump()
+            else:
+                return {
+                    "error": "Model returned empty response", 
+                    "raw_response": str(response)
+                }
+
+        except Exception as e:
+            logger.error(f"Long Content Analysis Error: {e}", exc_info=True)
+            return {
+                "error": f"Analysis failed: {str(e)}",
+                "type": "RuntimeError"
+            }

@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { Selection, PronunciationFeedback, AnalysisResult, TranslationEvaluation, GrammarCheckResult } from '../types';
+import { GEMINI_MODELS } from '../config/geminiModels';
 
 interface LanguageParams {
     targetLanguage: string;
@@ -41,7 +42,7 @@ export const getDictionaryLookup = async (selection: Selection, { targetLanguage
   `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: GEMINI_MODELS.default,
       contents: prompt,
       config: {
           responseMimeType: "application/json",
@@ -78,7 +79,7 @@ export const getDeepAnalysis = async (selection: Selection, { targetLanguage, na
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: GEMINI_MODELS.reasoning,  // Use Gemini 3 Pro for deep analysis
     contents: prompt,
     config: {
         responseMimeType: "application/json",
@@ -123,7 +124,7 @@ export const checkGrammar = async (text: string, targetLanguage: string): Promis
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: GEMINI_MODELS.default,
     contents: prompt,
     config: {
         responseMimeType: "application/json",
@@ -147,7 +148,7 @@ export const textToSpeech = async (text: string, { targetLanguage }: { targetLan
   
   // Note: Voice selection is simplified here. In a full app, map targetLanguage to specific voice names.
   const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
+      model: GEMINI_MODELS.tts,
       contents: [{ parts: [{ text: text }] }],
       config: {
         responseModalities: [Modality.AUDIO],
@@ -195,7 +196,7 @@ export const getPronunciationFeedback = async (text: string, audioBase64: string
     const textPart = { text: prompt };
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: GEMINI_MODELS.audio,  // Use Gemini 3 audio model
         contents: { parts: [audioPart, textPart] },
         config: {
             responseMimeType: "application/json",
@@ -264,7 +265,7 @@ export const evaluateTranslation = async (originalText: string, userTranslation:
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: GEMINI_MODELS.default,
     contents: prompt,
     config: {
         responseMimeType: "application/json",

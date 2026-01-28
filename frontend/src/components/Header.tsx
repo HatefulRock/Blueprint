@@ -61,9 +61,10 @@ export const Header = ({
 
   // Define navigation groups
   const learnOptions = [
-    { label: 'Reader', view: View.Reader, icon: BookOpenIcon },
+    { label: 'Library', view: View.Reader, icon: BookOpenIcon }, // Handles both text & video
     { label: 'Vocabulary', view: View.Vocabulary, icon: CollectionIcon },
     { label: 'Conversation', view: View.Conversation, icon: ChatBubbleIcon },
+    { label: 'Deep Analysis', view: View.DeepReading, icon: DocumentTextIcon }, // NEW: Advanced analysis
   ];
 
   const practiceOptions = [

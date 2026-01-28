@@ -29,7 +29,7 @@ const Flashcard = ({ word, isFlipped, onFlip, mode }: { word: Word, isFlipped: b
             frontClass = 'text-5xl font-bold text-emerald-300 font-mono';
             break;
         case 'def-to-word':
-            frontContent = word.analysis.translation;
+            frontContent = word.translation;
             frontClass = 'text-3xl text-slate-200';
             break;
         case 'cloze':
@@ -58,7 +58,7 @@ const Flashcard = ({ word, isFlipped, onFlip, mode }: { word: Word, isFlipped: b
                             </div>
                             <div>
                                 <h4 className="text-sm font-semibold text-sky-400 mb-1 uppercase tracking-wide">Translation</h4>
-                                <p className="text-xl text-slate-200">{word.analysis.translation}</p>
+                                <p className="text-xl text-slate-200">{word.translation}</p>
                             </div>
                             {word.context && (
                                 <div className="bg-slate-900/30 p-3 rounded-lg">
@@ -66,10 +66,10 @@ const Flashcard = ({ word, isFlipped, onFlip, mode }: { word: Word, isFlipped: b
                                     <p className="text-slate-300 italic">"{word.context}"</p>
                                 </div>
                             )}
-                            {word.analysis.grammaticalBreakdown && (
+                            {word.grammatical_breakdown && (
                                 <div>
                                     <h4 className="text-xs font-semibold text-sky-400 mb-1 uppercase">Notes</h4>
-                                    <p className="text-slate-400 text-sm">{word.analysis.grammaticalBreakdown}</p>
+                                    <p className="text-slate-400 text-sm">{word.grammatical_breakdown}</p>
                                 </div>
                             )}
                         </div>
@@ -158,7 +158,7 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
 
     // Deck State
     const [decks, setDecks] = useState<Deck[]>([]);
-    const [selectedDeckId, setSelectedDeckId] = useState<number | null>(null);
+    const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
     const [showImportModal, setShowImportModal] = useState(false);
     const [deckWords, setDeckWords] = useState<Word[]>([]);
 
@@ -224,26 +224,26 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
         }
     }, []);
 
-    const getDeckStats = useCallback((deckId: number | null) => {
+    const getDeckStats = useCallback((deckId: string | null) => {
         const relevantWords = deckId === null 
             ? wordBank 
-            : wordBank.filter(w => w.deckId === deckId);
+            : wordBank.filter(w => w.deck_id === deckId);
         
         const now = new Date();
         const total = relevantWords.length;
-        const due = relevantWords.filter(w => !w.nextReviewDate || new Date(w.nextReviewDate) <= now).length;
+        const due = relevantWords.filter(w => !w.next_review_date || new Date(w.next_review_date) <= now).length;
         
         return { total, due };
     }, [wordBank]);
     
-    const handleStartSession = useCallback(async (deckId: number | null) => {
+    const handleStartSession = useCallback(async (deckId: string | null) => {
         setIsLoading(true);
         setSelectedDeckId(deckId);
 
         // Filter words based on deck selection (used for client fallback only)
         let sessionWords = wordBank;
         if (deckId !== null) {
-            sessionWords = wordBank.filter(w => w.deckId === deckId);
+            sessionWords = wordBank.filter(w => w.deck_id === deckId);
         }
 
         try {
@@ -296,7 +296,7 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
         const name = prompt("Enter name for new deck:");
         if (name) {
             try {
-                const payload = { name, language: targetLanguage, user_id: 1 };
+                const payload = { name, language: targetLanguage};
                 const newDeck = await wordService.createDeck(payload);
                 setDecks(prev => [...prev, newDeck]);
             } catch (e) {
@@ -305,15 +305,15 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
         }
     }
 
-    const handleViewDeck = (deckId: number | null) => {
+    const handleViewDeck = (deckId: string | null) => {
         setSelectedDeckId(deckId);
         // Filter words by deck
-        const filtered = deckId === null ? wordBank : wordBank.filter(w => w.deckId === deckId);
+        const filtered = deckId === null ? wordBank : wordBank.filter(w => w.deck_id === deckId);
         setDeckWords(filtered);
         setViewState('manage');
     };
 
-    const handleDeleteWord = async (wordId: number) => {
+    const handleDeleteWord = async (wordId: string) => {
         if (!confirm('Are you sure you want to remove this word from your vocabulary?')) return;
         try {
             await wordService.deleteWord(wordId);
@@ -378,7 +378,7 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
         setShowTemplateEditor(true);
     };
 
-    const handleSetDeckTemplate = async (deckId: number, templateId: number | null) => {
+    const handleSetDeckTemplate = async (deckId: string, templateId: string | null) => {
         try {
             await wordService.updateDeck(deckId, { default_template_id: templateId });
             setDecks(prev => prev.map(d => d.id === deckId ? { ...d, default_template_id: templateId } : d));
@@ -713,7 +713,7 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
                             <select
                                 value={currentDeck.default_template_id || ''}
                                 onChange={(e) => {
-                                    const templateId = e.target.value ? parseInt(e.target.value) : null;
+                                    const templateId = e.target.value ? e.target.value : null;
                                     handleSetDeckTemplate(selectedDeckId, templateId);
                                 }}
                                 className="bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none"
@@ -753,7 +753,7 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
                                             className="border-t border-slate-700 hover:bg-slate-700/30 transition-colors"
                                         >
                                             <td className="p-4 text-emerald-300 font-bold">{word.term}</td>
-                                            <td className="p-4 text-slate-300">{word.analysis?.translation || word.translation || 'N/A'}</td>
+                                            <td className="p-4 text-slate-300">{word.translation || word.translation || 'N/A'}</td>
                                             <td className="p-4 text-slate-400 text-sm max-w-md truncate">
                                                 {word.context || 'No context'}
                                             </td>

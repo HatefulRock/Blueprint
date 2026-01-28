@@ -2,6 +2,7 @@ import os
 import hashlib
 from datetime import datetime, timedelta
 from typing import Optional
+import uuid
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -56,6 +57,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create a JWT access token."""
     to_encode = data.copy()
+    for key, value in to_encode.items():
+        if isinstance(value, uuid.UUID):
+            to_encode[key] = str(value)
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
@@ -70,11 +74,13 @@ def decode_access_token(token: str) -> Optional[schemas.TokenData]:
     """Decode and validate a JWT token."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("user_id")
+        user_id_str: str = payload.get("user_id")
         username: str = payload.get("username")
 
-        if user_id is None:
+        if user_id_str is None:
             return None
+
+        user_id = uuid.UUID(user_id_str)
 
         return schemas.TokenData(user_id=user_id, username=username)
     except JWTError:

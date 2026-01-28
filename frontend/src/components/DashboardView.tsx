@@ -253,6 +253,38 @@ export const DashboardView = ({
             </div>
           </div>
 
+          {/* Gemini 3 Showcase - Featured */}
+          <div>
+            <button
+              onClick={() => setCurrentView(View.Showcase)}
+              className="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-orange-600 p-6 rounded-2xl border border-purple-400/30 hover:scale-[1.02] transition-all duration-300 text-left shadow-2xl hover:shadow-purple-500/50 mb-8"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-3xl">✨</span>
+                    <h3 className="text-2xl font-bold text-white">Gemini 3 Showcase</h3>
+                    <span className="bg-white/20 backdrop-blur-sm px-2 py-1 rounded-full text-xs font-bold text-white">
+                      NEW
+                    </span>
+                  </div>
+                  <p className="text-white/90 text-sm mb-3">
+                    Explore cutting-edge AI features: Video Learning, Deep Reading, Enhanced Conversations & More
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    <span className="bg-white/10 backdrop-blur-sm px-2 py-1 rounded text-xs text-white/80">🎥 Multimodal</span>
+                    <span className="bg-white/10 backdrop-blur-sm px-2 py-1 rounded text-xs text-white/80">🧠 Reasoning</span>
+                    <span className="bg-white/10 backdrop-blur-sm px-2 py-1 rounded text-xs text-white/80">💬 Live Streaming</span>
+                    <span className="bg-white/10 backdrop-blur-sm px-2 py-1 rounded text-xs text-white/80">📚 Long Context</span>
+                  </div>
+                </div>
+                <div className="text-white/80 ml-4">
+                  <ArrowRightIcon className="w-8 h-8" />
+                </div>
+              </div>
+            </button>
+          </div>
+
           {/* Quick Start */}
           <div>
             <h3 className="text-2xl font-bold text-white mb-4">Jump Back In</h3>

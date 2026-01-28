@@ -1,9 +1,9 @@
-export const SUPPORTED_LANGUAGES = {
-  target: [...],
-  ui: [...]
-};
+// export const SUPPORTED_LANGUAGES = {
+//   target: [...],
+//   ui: [...]
+// };
 
-export const TRANSLATIONS = {
-  English: { ... },
-  Spanish: { ... }
-};
+// export const TRANSLATIONS = {
+//   English: { ... },
+//   Spanish: { ... }
+// };

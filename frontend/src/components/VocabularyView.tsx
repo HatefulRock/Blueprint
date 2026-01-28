@@ -11,10 +11,24 @@ import { wordService } from '../services/api';
 type SortKey = 'term' | 'familiarity_score' | 'next_review_date';
 type SortDirection = 'asc' | 'desc';
 
+type ID = string | number;
+
+interface ExtendedWord extends Omit<Word, 'id' | 'deck_id'> {
+  id: ID;
+  deck_id: ID;
+  [key: string]: any;
+}
+
+interface ExtendedDeck extends Omit<Deck, 'id'> {
+  id: ID;
+  [key: string]: any;
+}
+
 interface VocabularyViewProps {
-  wordBank: Word[];
+  wordBank: ExtendedWord[];
   onFamiliarityChange: (term: string, change: 1 | -1) => void;
   onPlayAudio: (text: string) => void;
+  refreshWords?: () => Promise<void>;
 }
 
 const FamiliarityMeter = ({ score }: { score: number }) => (
@@ -82,7 +96,7 @@ const ReviewStatus = ({ dateStr }: { dateStr?: string }) => {
     );
 }
 
-const DeckSelectionModal = ({ decks, onClose, onSelect }: { decks: Deck[], onClose: () => void, onSelect: (deckId: number) => void }) => {
+const DeckSelectionModal = ({ decks, onClose, onSelect }: { decks: ExtendedDeck[], onClose: () => void, onSelect: (deckId: ID) => void }) => {
   return (
     <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 w-full max-w-md m-4 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -119,62 +133,45 @@ const DeckSelectionModal = ({ decks, onClose, onSelect }: { decks: Deck[], onClo
   );
 };
 
-export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: VocabularyViewProps) => {
+export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio, refreshWords }: VocabularyViewProps) => {
   console.log('[VocabularyView] Rendered with wordBank:', wordBank?.length, 'words');
+  const [words, setWords] = useState<ExtendedWord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
 
   const [expandedTerm, setExpandedTerm] = useState<string | null>(null);
-  const [selectedWordId, setSelectedWordId] = useState<number | null>(null);
+  const [selectedWordId, setSelectedWordId] = useState<ID | null>(null);
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
   const [wordDetail, setWordDetail] = useState<any | null>(null);
 
   // Multi-select for bulk operations
-  const [selectedWords, setSelectedWords] = useState<Record<number, boolean>>({});
+  const [selectedWords, setSelectedWords] = useState<Record<string, boolean>>({});
 
   // Deck management
-  const [decks, setDecks] = useState<Deck[]>([]);
+  const [decks, setDecks] = useState<ExtendedDeck[]>([]);
   const [showDeckModal, setShowDeckModal] = useState(false);
-  const [wordsToAssign, setWordsToAssign] = useState<number[]>([]);
+  const [wordsToAssign, setWordsToAssign] = useState<ID[]>([]);
+  const [isLoadingDecks, setIsLoadingDecks] = useState(false);
 
-  const toggleSelectWord = (wordId?: number) => {
+  const toggleSelectWord = (wordId?: ID) => {
     if (!wordId) return;
-    setSelectedWords(prev => ({ ...prev, [wordId]: !prev[wordId] }));
+    const key = String(wordId);
+    setSelectedWords(prev => ({ ...prev, [key]: !prev[key] }));
   }
 
   const clearSelection = () => setSelectedWords({});
 
-  const getSelectedWordIds = () => Object.keys(selectedWords).filter(k => selectedWords[Number(k)]).map(k => Number(k));
+  const getSelectedWordIds = (): string[] => {
+  return Object.keys(selectedWords).filter(k => selectedWords[k]);
+};
 
   const [searchTerm, setSearchTerm] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('term');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
-  // Load decks on mount
-  useEffect(() => {
-    const loadDecks = async () => {
-      try {
-        const fetchedDecks = await wordService.getDecks();
-        setDecks(fetchedDecks as unknown as Deck[]);
-      } catch (e) {
-        console.error('Failed to fetch decks', e);
-      }
-    };
-    loadDecks();
-  }, []);
 
   const handleToggleExpand = (term: string) => {
       setExpandedTerm(prev => prev === term ? null : term);
-  }
-
-  const openDetailDrawer = async (wordId: number) => {
-      setSelectedWordId(wordId);
-      setDetailDrawerOpen(true);
-      try {
-          const res: any = await (await import('../services/vocabService')).vocabService.getWordDetail(wordId);
-          setWordDetail(res);
-      } catch (e) {
-          console.error('Failed to load word detail', e);
-          setWordDetail(null);
-      }
   }
 
   const closeDetailDrawer = () => {
@@ -183,12 +180,26 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
       setWordDetail(null);
   }
 
-  const handleAssignToDeck = (wordIds: number[]) => {
+  const handleAssignToDeck = async (wordIds: ID[]) => {
     setWordsToAssign(wordIds);
+    
+    if (decks.length === 0) {
+        setIsLoadingDecks(true);
+        try {
+            const fetchedDecks = await wordService.getDecks();
+            setDecks(fetchedDecks as unknown as Deck[]);
+        } catch (e) {
+            console.error('Failed to fetch decks', e);
+            (window as any).appSetToast?.({ type: 'error', message: 'Failed to load decks' });
+        } finally {
+            setIsLoadingDecks(false);
+        }
+    }
+    
     setShowDeckModal(true);
   };
 
-  const handleDeckSelection = async (deckId: number) => {
+  const handleDeckSelection = async (deckId: ID) => {
     try {
       // Move words to selected deck by updating their deck_id
       for (const wordId of wordsToAssign) {
@@ -206,8 +217,10 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
       setWordsToAssign([]);
       clearSelection();
 
-      // Refresh the page to show updated deck assignments
-      window.location.reload();
+      // Refresh the word bank to show updated deck assignments
+      if (refreshWords) {
+        await refreshWords();
+      }
     } catch (e) {
       console.error('Failed to assign words to deck', e);
       if ((window as any).appSetToast) {
@@ -366,7 +379,6 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio }: V
                     </td>
                       <td className="p-4 text-center">
                         <div className="flex items-center justify-center gap-2">
-                          <button onClick={(e) => { e.stopPropagation(); openDetailDrawer(word.id); }} className="px-3 py-1 bg-slate-700 rounded-md text-slate-300 hover:bg-sky-600">Details</button>
                           <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${expandedTerm === word.term ? 'rotate-180' : ''}`} />
                         </div>
                       </td>

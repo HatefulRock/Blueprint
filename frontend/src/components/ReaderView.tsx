@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { CuratedText, ActiveReadingText, ReadingContent } from "../types";
+import { CuratedText, ActiveReadingText, ReadingContent, View } from "../types";
 import { CURATED_CONTENT } from "../data/curatedContent";
 import { DocumentArrowUpIcon } from "./icons/DocumentArrowUpIcon";
 import { ClipboardDocumentIcon } from "./icons/ClipboardDocumentIcon";
 import { BookOpenIcon } from "./icons/BookOpenIcon";
 import { contentService } from "../services/api";
 
-// --- NEW: Trash Icon Component ---
 const TrashIcon = ({ className }: { className?: string }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -24,6 +23,24 @@ const TrashIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+// --- Video Icon Component ---
+const VideoIcon = ({ className }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    strokeWidth={1.5}
+    stroke="currentColor"
+    className={className}
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"
+    />
+  </svg>
+);
+
 // --- ContentLibrary Component ---
 const ContentLibrary = ({
   onSelectCuratedText,
@@ -32,7 +49,7 @@ const ContentLibrary = ({
   userArticles,
 }: {
   onSelectCuratedText: (text: CuratedText | ReadingContent) => void;
-  onDeleteArticle: (id: number) => void;
+  onDeleteArticle: (id: string) => void;
   targetLanguage: string;
   userArticles: ReadingContent[];
 }) => {
@@ -162,12 +179,14 @@ interface ReaderViewProps {
   onFileUpload: (file: File) => Promise<string | null>;
   isFileProcessing: boolean;
   targetLanguage: string;
+  setCurrentView?: (view: View) => void; // NEW: For navigating to video view
 }
 
 export const ReaderView = ({
   onStartReadingSession,
   targetLanguage,
   isFileProcessing: externalIsProcessing,
+  setCurrentView,
 }: ReaderViewProps) => {
   const [url, setUrl] = useState("");
   const [userArticles, setUserArticles] = useState<any[]>([]);
@@ -190,7 +209,7 @@ export const ReaderView = ({
   }, []);
 
   // --- NEW: Handle Delete ---
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     try {
       // 1. Call API
       await contentService.deleteContent(id);
@@ -234,6 +253,7 @@ export const ReaderView = ({
     });
   };
 
+  // Handle text file upload
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -268,6 +288,45 @@ export const ReaderView = ({
       alert("Error reading file.");
     } finally {
       setLocalFileProcessing(false);
+    }
+  };
+
+  // NEW: Handle video file upload
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    e.target.value = "";
+
+    // Check if it's a video file
+    const isVideo = file.type.startsWith('video/') ||
+                    /\.(mp4|webm|mov)$/i.test(file.name);
+
+    if (!isVideo) {
+      alert("Please upload a video file (MP4, WEBM, or MOV)");
+      return;
+    }
+
+    // Check file size (50MB limit)
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSize) {
+      alert("Video file is too large. Maximum size is 50MB.");
+      return;
+    }
+
+    // Navigate to VideoLearningView with the file
+    if (setCurrentView) {
+      // Store the file temporarily (we'll handle this in VideoLearningView)
+      sessionStorage.setItem('pendingVideoFile', file.name);
+      // We can't pass the file object directly through navigation
+      // So we'll create an object URL and pass it
+      const videoUrl = URL.createObjectURL(file);
+      sessionStorage.setItem('pendingVideoUrl', videoUrl);
+      sessionStorage.setItem('pendingVideoFileName', file.name);
+
+      setCurrentView(View.VideoLearning);
+    } else {
+      alert("Video upload feature requires navigation support.");
     }
   };
 
@@ -355,19 +414,19 @@ export const ReaderView = ({
                 </div>
               </form>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 mb-3">
                 <div className="relative group">
                   <div className="relative flex flex-col items-center justify-center bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-lg p-4 text-center transition-all h-full">
                     <DocumentArrowUpIcon className="w-6 h-6 text-indigo-400 mb-2" />
                     <span className="text-xs font-bold text-slate-300 mb-0.5">
-                      Upload File
+                      Upload Text
                     </span>
                     <span className="text-[10px] text-slate-500">
-                      .txt only
+                      .txt
                     </span>
                     <label
                       className="absolute inset-0 cursor-pointer"
-                      title="Upload File"
+                      title="Upload Text File"
                     >
                       <input
                         type="file"
@@ -396,6 +455,30 @@ export const ReaderView = ({
                   <span className="text-[10px] text-slate-500">Clipboard</span>
                 </button>
               </div>
+
+              {/* NEW: Video Upload */}
+              <div className="relative group">
+                <div className="relative flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/30 to-pink-900/30 hover:from-purple-800/40 hover:to-pink-800/40 border border-purple-500/30 rounded-lg p-4 text-center transition-all">
+                  <VideoIcon className="w-6 h-6 text-purple-400 mb-2" />
+                  <span className="text-xs font-bold text-purple-300 mb-0.5">
+                    Upload Video
+                  </span>
+                  <span className="text-[10px] text-purple-400/70">
+                    MP4, WEBM, MOV (max 50MB)
+                  </span>
+                  <label
+                    className="absolute inset-0 cursor-pointer"
+                    title="Upload Video for Multimodal Learning"
+                  >
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm,video/mov"
+                      onChange={handleVideoUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -415,7 +498,7 @@ export const ReaderView = ({
                 content: text.content,
               })
             }
-            onDeleteArticle={handleDelete} // PASSED HERE
+            onDeleteArticle={handleDelete}
             targetLanguage={targetLanguage}
             userArticles={userArticles}
           />

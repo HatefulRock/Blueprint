@@ -1,28 +1,57 @@
-import datetime
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
+from typing import List, Optional, Dict, Any
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
-from .. import models
+from .. import models, schemas
 from ..models import Word
 from ..services.auth import get_current_user
 from ..services.database import get_db
 from ..services.practice_generator import PracticeGenerator
 
+# Setup logger
+logger = logging.getLogger("app.practice")
+
 router = APIRouter(prefix="/practice", tags=["practice"])
 
+# --- Helper ---
+
+def verify_deck_ownership(db: Session, deck_id: str, user_id: str):
+    deck = db.query(models.Deck).filter(models.Deck.id == deck_id).first()
+    if not deck:
+        raise HTTPException(status_code=404, detail="Deck not found")
+    if str(deck.user_id) != str(user_id):
+        logger.warning(f"User {user_id} attempted to access deck {deck_id} owned by {deck.user_id}")
+        raise HTTPException(status_code=403, detail="Access denied to this deck")
+    return deck
+
+# --- Endpoints ---
 
 @router.get("/generate/{deck_id}")
-async def get_practice_session(deck_id: int, db: Session = Depends(get_db)):
-    # existing quiz generator for AI-created practice
+async def get_ai_practice_quiz(
+    deck_id: str, 
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate an AI-powered quiz from due words or low-familiarity words.
+    """
+    deck = verify_deck_ownership(db, deck_id, current_user.id)
+
+    # 1. Fetch candidate words (due first, then low familiarity)
+    now = datetime.now(timezone.utc)
     words = (
         db.query(Word)
-        .filter(Word.deck_id == deck_id, Word.next_review_date <= datetime.utcnow())
+        .filter(Word.deck_id == deck_id, Word.next_review_date <= now)
+        .limit(15)
         .all()
     )
 
     if not words:
+        logger.info(f"No due words for deck {deck_id}, falling back to low familiarity words.")
         words = (
             db.query(Word)
             .filter(Word.deck_id == deck_id)
@@ -31,120 +60,135 @@ async def get_practice_session(deck_id: int, db: Session = Depends(get_db)):
             .all()
         )
 
+    if not words:
+        raise HTTPException(status_code=404, detail="No words found in this deck to practice.")
+
     words_data = [
         {"term": w.term, "translation": w.translation, "context": w.context}
         for w in words
     ]
 
-    quiz = await PracticeGenerator.generate_quiz_from_words(words_data, "Chinese")
-
-    return {"quiz": quiz}
-
+    # 2. Call AI Generator
+    try:
+        logger.info(f"Generating AI quiz for user {current_user.id} on deck {deck_id}")
+        quiz = await PracticeGenerator.generate_quiz_from_words(words_data, deck.language or "Target Language")
+        return {"quiz": quiz}
+    except Exception as e:
+        logger.error(f"AI Practice Generator failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail="Failed to generate AI quiz. Please try again later."
+        )
 
 @router.post("/session")
 def create_study_session(
-    payload: dict = Body(...),
+    payload: schemas.StudySessionRequest, # Using a proper schema
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create a study session (server-curated queue) for flashcards.
-    payload: {deck_id: int|null, limit: int}
-    Returns list of Card objects ready for review ordered by priority.
     """
+    Create a server-curated queue of flashcards for review.
+    Returns cards prioritized by SRS due date.
+    """
+    deck_id = payload.deck_id
+    limit = payload.limit or 20
+    now = datetime.now(timezone.utc)
 
-    deck_id = payload.get("deck_id")
-    limit = int(payload.get("limit", 20))
-    user_id = current_user.id
-
-    now = datetime.datetime.utcnow()
-
+    # If deck_id is provided, verify it. If not, we query all user's decks.
     query = db.query(models.Card)
-
-    if deck_id is not None:
-        query = query.filter(models.Card.deck_id == int(deck_id))
+    if deck_id:
+        verify_deck_ownership(db, deck_id, current_user.id)
+        query = query.filter(models.Card.deck_id == deck_id)
     else:
-        # all decks for user
-        query = query.join(models.Deck).filter(models.Deck.user_id == int(user_id))
+        query = query.join(models.Deck).filter(models.Deck.user_id == current_user.id)
 
-    # Prefer due cards first
-    due_cards = (
-        query.filter(models.Card.next_review_date <= now)
-        .order_by(models.Card.next_review_date.asc())
-        .limit(limit)
-        .all()
-    )
-
-    if len(due_cards) < limit:
-        # Fill with cards with lowest easiness_factor and older last_reviewed_date
-        needed = limit - len(due_cards)
-        extras = (
-            query.filter(models.Card.next_review_date > now)
-            .order_by(
-                models.Card.easiness_factor.asc(), models.Card.next_review_date.asc()
-            )
-            .limit(needed)
+    try:
+        # 1. Get Due Cards
+        due_cards = (
+            query.filter(models.Card.next_review_date <= now)
+            .order_by(models.Card.next_review_date.asc())
+            .limit(limit)
             .all()
         )
-        cards = due_cards + extras
-    else:
+
+        # 2. If session isn't full, fill with upcoming cards (SRS 'Leaning' or 'Graduated' early)
         cards = due_cards
+        if len(due_cards) < limit:
+            needed = limit - len(due_cards)
+            extras = (
+                query.filter(models.Card.next_review_date > now)
+                .order_by(models.Card.easiness_factor.asc(), models.Card.next_review_date.asc())
+                .limit(needed)
+                .all()
+            )
+            cards = due_cards + extras
 
-    # Serialize minimal card info
-    out = [
-        {
-            "id": c.id,
-            "deck_id": c.deck_id,
-            "front": c.front,
-            "back": c.back,
-            "repetition": c.repetition,
-            "easiness_factor": c.easiness_factor,
-            "interval": c.interval,
-            "next_review_date": c.next_review_date.isoformat()
-            if c.next_review_date
-            else None,
-            "last_reviewed_date": c.last_reviewed_date.isoformat()
-            if c.last_reviewed_date
-            else None,
-        }
-        for c in cards
-    ]
-
-    # Create a PracticeSession record for analytics
-    try:
-        session = models.PracticeSession(
-            user_id=int(user_id) if user_id else 0, session_type="flashcards", score=0
+        # 3. Create Session Record
+        new_session = models.PracticeSession(
+            user_id=current_user.id,
+            session_type="flashcards",
+            score=0
         )
-        db.add(session)
+        db.add(new_session)
         db.commit()
-        db.refresh(session)
-        session_id = session.id
-    except Exception:
-        session_id = None
+        db.refresh(new_session)
 
-    return {"cards": out, "session_id": session_id}
+        logger.info(f"Created practice session {new_session.id} for user {current_user.id}")
 
-
-@router.get("/sessions")
-def list_practice_sessions(
-    user_id: int, limit: int = 20, db: Session = Depends(get_db)
-):
-    """Return recent practice sessions for a user."""
-    sessions = (
-        db.query(models.PracticeSession)
-        .filter(models.PracticeSession.user_id == int(user_id))
-        .order_by(models.PracticeSession.timestamp.desc())
-        .limit(int(limit))
-        .all()
-    )
-
-    out = [
-        {
-            "id": s.id,
-            "user_id": s.user_id,
-            "session_type": s.session_type,
-            "score": s.score,
-            "timestamp": s.timestamp.isoformat() if s.timestamp else None,
+        return {
+            "session_id": new_session.id,
+            "cards": cards # FastAPI will use CardRead schema if configured
         }
-        for s in sessions
-    ]
-    return {"sessions": out}
+
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Database error creating practice session: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal database error")
+
+@router.get("/sessions", response_model=Dict[str, Any])
+def list_practice_sessions(
+    limit: int = 20, 
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Return recent practice sessions for the authenticated user."""
+    try:
+        sessions = (
+            db.query(models.PracticeSession)
+            .filter(models.PracticeSession.user_id == current_user.id)
+            .order_by(models.PracticeSession.timestamp.desc())
+            .limit(limit)
+            .all()
+        )
+
+        return {
+            "sessions": sessions,
+            "count": len(sessions)
+        }
+    except SQLAlchemyError as e:
+        logger.error(f"Error fetching sessions for {current_user.id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch session history")
+
+@router.patch("/session/{session_id}/score")
+def update_session_score(
+    session_id: str,
+    score: int = Body(..., embed=True),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update the final score of a practice session."""
+    session = db.query(models.PracticeSession).filter(
+        models.PracticeSession.id == session_id,
+        models.PracticeSession.user_id == current_user.id
+    ).first()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    try:
+        session.score = score
+        db.commit()
+        return {"ok": True}
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update score")

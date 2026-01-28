@@ -2,6 +2,9 @@ import axios from "axios";
 
 const API_BASE_URL = "http://localhost:8000";
 
+type ID = string | number;
+
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -108,15 +111,15 @@ export const templateService = {
     const res = await api.post(`/templates/`, templateData);
     return res as any;
   },
-  updateTemplate: async (templateId: number, templateData: any) => {
+  updateTemplate: async (templateId: ID, templateData: any) => {
     const res = await api.patch(`/templates/${templateId}`, templateData);
     return res as any;
   },
-  deleteTemplate: async (templateId: number) => {
+  deleteTemplate: async (templateId: ID) => {
     const res = await api.delete(`/templates/${templateId}`);
     return res as any;
   },
-  previewTemplate: async (templateId: number) => {
+  previewTemplate: async (templateId: ID) => {
     const res = await api.get(`/templates/${templateId}/preview`);
     return res as any;
   },
@@ -127,7 +130,7 @@ export const wordService = {
     const res = await api.get(`/words/`);
     return res as any;
   },
-  getWordsByDeck: async (deckId: number) => {
+  getWordsByDeck: async (deckId: ID) => {
     const res = await api.get(`/words/deck/${deckId}`);
     return res as any;
   },
@@ -135,15 +138,15 @@ export const wordService = {
     const res = await api.post("/words/", wordData);
     return res as any;
   },
-  deleteWord: async (wordId: number) => {
+  deleteWord: async (wordId: ID) => {
     const res = await api.delete(`/words/${wordId}`);
     return res as any;
   },
-  updateWord: async (wordId: number, data: any) => {
+  updateWord: async (wordId: ID, data: any) => {
     const res = await api.patch(`/words/${wordId}`, data);
     return res as any;
   },
-  reviewWord: async (wordId: number, rating: number) => {
+  reviewWord: async (wordId: ID, rating: number) => {
     const res = await api.patch(`/words/${wordId}/review`, null, { params: { rating } });
     return res as any;
   },
@@ -163,7 +166,7 @@ export const wordService = {
     const res = await api.post(`/words/decks`, rest);
     return res as any;
   },
-  updateDeck: async (deckId: number, payload: any) => {
+  updateDeck: async (deckId: ID, payload: any) => {
     const res = await api.patch(`/words/decks/${deckId}`, payload);
     return res as any;
   },
@@ -174,30 +177,30 @@ export const wordService = {
   },
 
   // Cards and templates
-  getDueCards: async (deckId: number) => {
+  getDueCards: async (deckId: ID) => {
     const res = await api.get(`/words/cards/due/${deckId}`);
     return res as any;
   },
-  getCardsForDeck: async (deckId: number) => {
+  getCardsForDeck: async (deckId: ID) => {
     const res = await api.get(`/words/cards/deck/${deckId}`);
     return res as any;
   },
-  reviewCard: async (cardId: number, rating: number, session_id?: number | null) => {
+  reviewCard: async (cardId: ID, rating: number, session_id?: number | null) => {
     const payload: any = { rating };
     if (session_id) payload.session_id = session_id;
     const res = await api.post(`/words/cards/${cardId}/review`, payload);
     return res as any;
   },
-  createCardFromWord: async (wordId: number, templateId?: number) => {
+  createCardFromWord: async (wordId: ID, templateId?: ID) => {
     const res = await api.post(`/words/cards/from_word/${wordId}`, { template_id: templateId });
     return res as any;
   },
-  bulkCreateFromDeck: async (deckId: number, templateId?: number) => {
+  bulkCreateFromDeck: async (deckId: ID, templateId?: ID) => {
     const res = await api.post(`/words/cards/from_deck/${deckId}`, { template_id: templateId });
     return res as any;
   },
   // New utility to bulk-create cards from a list of word IDs (server will link word_id)
-  bulkCreateFromWordIds: async (wordIds: number[], templateId?: number, deckId?: number) => {
+  bulkCreateFromWordIds: async (wordIds: ID[], templateId?: ID, deckId?: ID) => {
     const res = await api.post(`/words/cards/bulk_from_words`, { word_ids: wordIds, template_id: templateId, deck_id: deckId });
     return res as any;
   },
@@ -247,7 +250,7 @@ export const contentService = {
   saveManualContent: (title: string, content: string) =>
     api.post("/content/", { title, content }),
 
-  deleteContent: (contentId: number) => {
+  deleteContent: (contentId: ID) => {
     return api.delete(`/content/${contentId}`);
   },
 };
@@ -261,17 +264,16 @@ export const grammarService = {
   getExerciseSets: () => api.get("/grammar/sets"),
 
   // Get specific exercise set with exercises
-  getExerciseSet: (setId: number) => api.get(`/grammar/sets/${setId}`),
+  getExerciseSet: (setId: ID) => api.get(`/grammar/sets/${setId}`),
 
   // Check answer
-  checkAnswer: (payload: { exercise_id: number; user_answer: string }) =>
+  checkAnswer: (payload: { exercise_id: ID; user_answer: string }) =>
     api.post("/grammar/check", payload),
 
   // Delete exercise set
-  deleteExerciseSet: (setId: number) => api.delete(`/grammar/sets/${setId}`),
-
+  deleteExerciseSet: (setId: ID) => api.delete(`/grammar/sets/${setId}`),
   // Get progress for exercise set
-  getProgress: (setId: number) => api.get(`/grammar/sets/${setId}/progress`),
+  getProgress: (setId: ID) => api.get(`/grammar/sets/${setId}/progress`),
 };
 
 export const analyticsService = {
@@ -287,7 +289,7 @@ export const analyticsService = {
     api.get("/analytics/heatmap", { params: { days } }),
 
   // Get practice statistics (legacy endpoint)
-  getPracticeStats: (userId: number, dateFrom?: string, dateTo?: string) =>
+  getPracticeStats: (userId: ID, dateFrom?: string, dateTo?: string) =>
     api.get("/analytics/practice", {
       params: { user_id: userId, date_from: dateFrom, date_to: dateTo },
     }),

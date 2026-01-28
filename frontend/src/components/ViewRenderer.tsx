@@ -19,6 +19,11 @@ import { PronunciationPractice } from "./PronunciationPractice";
 import { WritingPractice } from "./WritingPractice";
 import { GrammarExercises } from "./GrammarExercises";
 
+// Gemini 3 Showcase Components
+import { GeminiShowcase } from "./GeminiShowcase";
+import { VideoLearningView } from "./VideoLearningView";
+import { DeepReadingAnalysis } from "./DeepReadingAnalysis";
+
 export const ViewRenderer: React.FC = () => {
   const {
     currentView,
@@ -45,6 +50,7 @@ export const ViewRenderer: React.FC = () => {
     addWord,
     handleRequestDeepAnalysis,
     handlePlayAudio,
+    refreshWords,
   } = useApp();
 
   const [isGeneratingExercises, setIsGeneratingExercises] = useState(false);
@@ -226,6 +232,7 @@ export const ViewRenderer: React.FC = () => {
           onFileUpload={async () => null}
           isFileProcessing={false}
           targetLanguage={targetLanguage}
+          setCurrentView={setCurrentView} // NEW: Enable video navigation
         />
       );
 
@@ -270,6 +277,7 @@ export const ViewRenderer: React.FC = () => {
           wordBank={wordBank}
           onFamiliarityChange={() => {}} // Connect to updateWord in context
           onPlayAudio={handlePlayAudio}
+          refreshWords={refreshWords}
         />
       );
 
@@ -312,6 +320,28 @@ export const ViewRenderer: React.FC = () => {
 
     case View.Settings:
       return <SettingsPage />;
+
+    // Gemini 3 Showcase Features
+    case View.Showcase:
+      return <GeminiShowcase onNavigate={setCurrentView} />;
+
+    case View.VideoLearning:
+      return (
+        <VideoLearningView
+          targetLanguage={targetLanguage}
+          nativeLanguage={uiLanguage}
+          onNavigateBack={() => setCurrentView(View.Showcase)}
+        />
+      );
+
+    case View.DeepReading:
+      return (
+        <DeepReadingAnalysis
+          targetLanguage={targetLanguage}
+          nativeLanguage={uiLanguage}
+          onNavigateBack={() => setCurrentView(View.Showcase)}
+        />
+      );
 
     default:
       return <div>View Not Found</div>;

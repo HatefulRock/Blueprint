@@ -7,6 +7,7 @@ import { getPronunciationFeedback } from '../services/geminiService';
 import api, { aiService } from '../services/api';
 import { CONVERSATION_SCENARIOS, ConversationScenario } from '../data/conversationScenarios';
 import { ChatBubbleIcon } from './icons/ChatBubbleIcon';
+import { GEMINI_MODELS } from '../config/geminiModels';
 
 interface ConversationViewProps {
     targetLanguage: string;
@@ -232,7 +233,7 @@ export const ConversationView = ({ targetLanguage }: ConversationViewProps) => {
             mediaStreamRef.current = stream;
 
             sessionPromiseRef.current = ai.live.connect({
-                model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+                model: GEMINI_MODELS.live,  // Use Gemini 3 Live for real-time conversation
                 callbacks: {
                     onopen: () => {
                         setIsSessionActive(true);
@@ -475,17 +476,19 @@ export const ConversationView = ({ targetLanguage }: ConversationViewProps) => {
                                     : 'bg-slate-700/30 border-slate-700 text-slate-300 hover:bg-slate-700 hover:border-slate-600'
                             } ${isSessionActive && selectedScenario.id !== scenario.id ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
-                            <div className="flex items-center gap-3 mb-1">
-                                <span className="text-xl">
-                                    {scenario.id === 'tutor' ? '👩‍🏫' : 
-                                     scenario.id === 'cafe' ? '☕' :
-                                     scenario.id === 'directions' ? '🗺️' : '💼'}
-                                </span>
-                                <span className="font-semibold">{scenario.name}</span>
+                            <div className="flex items-center gap-3 mb-2">
+                                <span className="text-2xl">{scenario.icon}</span>
+                                <div className="flex-1">
+                                    <div className="font-semibold">{scenario.name}</div>
+                                    <div className="text-xs text-slate-400 mt-0.5">{scenario.difficulty}</div>
+                                </div>
+                            </div>
+                            <div className="text-xs text-slate-400 leading-relaxed pl-9">
+                                {scenario.description}
                             </div>
                             {selectedScenario.id === scenario.id && (
-                                <div className="text-xs text-sky-200 mt-2 pl-9 animate-fade-in">
-                                    Active Scenario
+                                <div className="text-xs text-sky-200 mt-2 pl-9 animate-fade-in font-semibold">
+                                    ✓ Active Scenario
                                 </div>
                             )}
                         </button>
