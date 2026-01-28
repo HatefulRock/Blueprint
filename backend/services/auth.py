@@ -3,11 +3,11 @@ import hashlib
 from datetime import datetime, timedelta
 from typing import Optional
 import uuid
+from passlib.context import CryptContext
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 import models
@@ -16,7 +16,7 @@ from services.database import get_db
 
 # Password hashing with bcrypt
 # Use sha256 pre-hashing to avoid bcrypt's 72-byte limit
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 # JWT settings
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
