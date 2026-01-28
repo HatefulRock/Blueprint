@@ -6,7 +6,7 @@ from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, Strin
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
-from backend.services.database import Base
+from services.database import Base
 
 # --- Helper for default UUID generation ---
 def generate_uuid():

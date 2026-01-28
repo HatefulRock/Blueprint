@@ -2,8 +2,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from jinja2 import Template
 
-from .. import models
-
+import models
 
 class CardService:
     """Service for creating flashcards from words with template rendering."""

@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from .. import models, schemas
-from ..services.auth import get_current_user
-from ..services.database import get_db
+import models
+import schemas
+from services.auth import get_current_user
+from services.database import get_db
 
 # Setup logger
 logger = logging.getLogger("app.templates")

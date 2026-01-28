@@ -16,7 +16,7 @@ import json
 from typing import Dict, List, Optional
 from google import genai
 from google.genai import types
-from ..config.gemini_models import GEMINI_MODELS
+from config.gemini_models import GEMINI_MODELS
 
 
 class VideoProcessor:

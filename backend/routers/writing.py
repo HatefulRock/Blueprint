@@ -3,11 +3,12 @@ from sqlalchemy.orm import Session
 from typing import List
 import json
 
-from .. import models, schemas
-from ..services.auth import get_current_user
-from ..services.database import get_db
-from ..services.gemini import GeminiService
-from ..config.gemini_models import GEMINI_MODELS
+import models
+import schemas
+from services.auth import get_current_user
+from services.database import get_db
+from services.gemini import GeminiService
+from config.gemini_models import GEMINI_MODELS
 
 router = APIRouter(prefix="/writing", tags=["writing"])
 

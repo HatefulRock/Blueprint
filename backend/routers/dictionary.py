@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from typing import Optional
-from .. import schemas
-from ..services.gemini import GeminiService
+import schemas
+from services.gemini import GeminiService
 from functools import lru_cache
-from ..services.cache import cache
+from services.cache import cache
 
 router = APIRouter(prefix="/dictionary", tags=["dictionary"])
 

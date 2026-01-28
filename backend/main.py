@@ -1,8 +1,8 @@
 import time
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import auth, users, words, content, ai, conversation, leaderboard, analytics, writing, grammar, templates, vocab, practice, video
-from backend.models import (
+from routers import auth, users, words, content, ai, conversation, leaderboard, analytics, writing, grammar, templates, vocab, practice, video
+from models import (
     User,
     Deck,
     Word,
@@ -11,7 +11,7 @@ from backend.models import (
     PracticeSession,
     PracticeReview,
 )
-from backend.services.database import engine, Base
+from services.database import engine, Base
 import logging
 
 

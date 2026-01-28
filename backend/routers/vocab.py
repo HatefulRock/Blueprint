@@ -4,10 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from ..services.auth import get_current_user
-from ..services.database import get_db
-from ..services.cache import cache, make_dict_key
-from .. import models, schemas
+from services.auth import get_current_user
+from services.database import get_db
+from services.cache import cache, make_dict_key
+import models
+import schemas
 
 # Setup logger
 logger = logging.getLogger("app.vocab")

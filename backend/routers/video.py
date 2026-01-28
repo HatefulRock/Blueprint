@@ -20,10 +20,10 @@ from typing import List, Optional
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from .. import models, schemas
-from ..services.auth import get_current_user
-from ..services.database import get_db
-from ..services.video_processor import VideoProcessor
+import models
+from services.auth import get_current_user
+from services.database import get_db
+from services.video_processor import VideoProcessor
 
 
 router = APIRouter(prefix="/video", tags=["video"])

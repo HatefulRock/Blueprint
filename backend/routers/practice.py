@@ -6,11 +6,12 @@ from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from .. import models, schemas
-from ..models import Word
-from ..services.auth import get_current_user
-from ..services.database import get_db
-from ..services.practice_generator import PracticeGenerator
+import models
+import schemas
+from models import Word
+from services.auth import get_current_user
+from services.database import get_db
+from services.practice_generator import PracticeGenerator
 
 # Setup logger
 logger = logging.getLogger("app.practice")

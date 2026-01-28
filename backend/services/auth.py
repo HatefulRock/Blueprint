@@ -10,8 +10,9 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
-from backend import models, schemas
-from backend.services.database import get_db
+import models
+import schemas
+from services.database import get_db
 
 # Password hashing with bcrypt
 # Use sha256 pre-hashing to avoid bcrypt's 72-byte limit

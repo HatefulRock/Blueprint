@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from typing import Optional
-from ..services.queue import redis_client
+from services.queue import redis_client
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 

@@ -6,11 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Body, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from ..services.auth import get_current_user
-from ..services.database import get_db
-from ..services.card_service import CardService
-from ..services.srs import update_card_after_review
-from .. import models, schemas
+from services.auth import get_current_user
+from services.database import get_db
+from services.card_service import CardService
+from services.srs import update_card_after_review
+import models
+import schemas
 
 # Setup logger
 logger = logging.getLogger("app.words")

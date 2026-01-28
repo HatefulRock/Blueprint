@@ -8,10 +8,11 @@ from datetime import datetime
 from google import genai
 from google.genai import types
 
-from .. import models, schemas
-from ..services.auth import get_current_user
-from ..services.database import get_db
-from ..config.gemini_models import GEMINI_MODELS
+import models
+import schemas
+from services.auth import get_current_user
+from services.database import get_db
+from config.gemini_models import GEMINI_MODELS
 
 router = APIRouter(prefix="/grammar", tags=["grammar"])
 

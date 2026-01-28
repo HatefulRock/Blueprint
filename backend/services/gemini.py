@@ -9,9 +9,9 @@ from google import genai
 from google.genai import types
 from gtts import gTTS
 
-from backend import schemas
+import schemas
 
-from ..config.gemini_models import GEMINI_MODELS
+from config.gemini_models import GEMINI_MODELS
 
 logger = logging.getLogger("gemini_service")
 load_dotenv()

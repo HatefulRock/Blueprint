@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
-from ..services.gemini import GeminiService
-from .. import schemas
+from services.gemini import GeminiService
+import schemas
 import tempfile
 import os
 import logging
