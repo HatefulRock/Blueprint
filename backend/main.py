@@ -66,7 +66,7 @@ async def log_requests(request: Request, call_next):
         raise e
 
 # 1. For development, allow all origins so CORS won't block requests from local frontends
-origins = ["*"]
+origins = ["*","https://blueprint-pearl.vercel.app/"]
 
 # 2. Add the Middleware
 app.add_middleware(
