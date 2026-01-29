@@ -222,7 +222,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         wordBreakdown: deep.vocabulary?.map((v: any) => ({
           term: v.term,
           translation: v.translation,
-          partOfSpeech: v.pos || v.part_of_speech || v.partOfSpeech || ""
+          partOfSpeech: v.pos || v.part_of_speech || v.partOfSpeech || "",
+          pinyin: v.pinyin ?? undefined
         })) || undefined,
         difficultyLevel: deep.difficulty_level || deep.difficultyLevel || undefined,
         usageExamples: deep.usage_examples || deep.usageExamples || undefined,

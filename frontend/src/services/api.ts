@@ -1,7 +1,7 @@
 import axios from "axios";
 
-//const API_BASE_URL = "http://localhost:8000";
-const API_BASE_URL = "https://blueprint-qubr.vercel.app";
+const API_BASE_URL = "http://localhost:8000";
+//const API_BASE_URL = "https://blueprint-qubr.vercel.app";
 
 type ID = string | number;
 
@@ -141,6 +141,10 @@ export const wordService = {
   },
   deleteWord: async (wordId: ID) => {
     const res = await api.delete(`/words/${wordId}`);
+    return res as any;
+  },
+  bulkDeleteWords: async (wordIds: ID[]) => {
+    const res = await api.post(`/words/bulk_delete`, { word_ids: wordIds });
     return res as any;
   },
   updateWord: async (wordId: ID, data: any) => {

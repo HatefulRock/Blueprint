@@ -291,6 +291,72 @@ export const ReaderView = ({
     }
   };
 
+  // NEW: Handle PDF file upload
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    e.target.value = "";
+
+    // Check if it's a PDF file
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+    if (!isPdf) {
+      alert("Please upload a PDF file");
+      return;
+    }
+
+    // Check file size (10MB limit)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      alert("PDF file is too large. Maximum size is 10MB.");
+      return;
+    }
+
+    setLocalFileProcessing(true);
+
+    try {
+      // Create FormData to send the file
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Get auth token
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      // Upload to backend
+      const response = await fetch('http://localhost:8000/content/upload', {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Upload failed');
+      }
+
+      const newArticle = await response.json();
+      setUserArticles((prev) => [newArticle, ...prev]);
+
+      // Start reading session with the uploaded PDF content
+      onStartReadingSession({
+        title: newArticle.title,
+        content: newArticle.content,
+      });
+
+      alert('PDF uploaded successfully!');
+    } catch (err: any) {
+      console.error("PDF upload error:", err);
+      alert(`Failed to upload PDF: ${err.message || 'Unknown error'}`);
+    } finally {
+      setLocalFileProcessing(false);
+    }
+  };
+
   // NEW: Handle video file upload
   const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -414,7 +480,7 @@ export const ReaderView = ({
                 </div>
               </form>
 
-              <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
                 <div className="relative group">
                   <div className="relative flex flex-col items-center justify-center bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-lg p-4 text-center transition-all h-full">
                     <DocumentArrowUpIcon className="w-6 h-6 text-indigo-400 mb-2" />
@@ -439,6 +505,37 @@ export const ReaderView = ({
                     {isProcessing && (
                       <div className="absolute inset-0 bg-slate-900/80 flex items-center justify-center rounded-lg z-10">
                         <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="relative group">
+                  <div className="relative flex flex-col items-center justify-center bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-lg p-4 text-center transition-all h-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-red-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-xs font-bold text-slate-300 mb-0.5">
+                      Upload PDF
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      .pdf
+                    </span>
+                    <label
+                      className="absolute inset-0 cursor-pointer"
+                      title="Upload PDF File"
+                    >
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        onChange={handlePdfUpload}
+                        className="hidden"
+                        disabled={isProcessing}
+                      />
+                    </label>
+                    {isProcessing && (
+                      <div className="absolute inset-0 bg-slate-900/80 flex items-center justify-center rounded-lg z-10">
+                        <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
                       </div>
                     )}
                   </div>

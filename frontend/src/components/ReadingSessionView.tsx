@@ -4,6 +4,7 @@ import { HighlightedText } from "./HighlightedText";
 import { MarginaliaPanel } from "./MarginaliaPanel";
 import { AnalysisPopup } from "./AnalysisPopup";
 import { ArrowLeftIcon } from "./icons/ArrowLeftIcon";
+import { BookOpenIcon } from "@heroicons/react/24/outline";
 
 interface ReadingSessionViewProps {
   title: string;
@@ -21,7 +22,6 @@ interface ReadingSessionViewProps {
   analysisDisplayMode: AnalysisDisplayMode;
   isPopupOpen: boolean;
   setIsPopupOpen: (isOpen: boolean) => void;
-  // Adjusted type for onSaveWord to make it flexible for UI components
   onSaveWord: (wordData: any) => void;
   isWordInBank: boolean;
   onGenerateExercises?: () => void;
@@ -59,14 +59,13 @@ export const ReadingSessionView = ({
         ? "sentence"
         : "word";
 
-    // NEW: Extract surrounding sentence as context for single words
+    // Extract surrounding sentence as context for single words
     let contextSentence = selectedText;
     if (type === "word") {
       try {
         const range = windowSelection?.getRangeAt(0);
         const container = range?.commonAncestorContainer;
 
-        // Get the text content from the parent element or text node
         let fullText = "";
         if (container?.nodeType === Node.TEXT_NODE) {
           fullText = container.parentElement?.textContent || container.textContent || "";
@@ -80,7 +79,6 @@ export const ReadingSessionView = ({
             const beforeWord = fullText.substring(0, wordIndex);
             const afterWord = fullText.substring(wordIndex + selectedText.length);
 
-            // Find sentence boundaries (period, exclamation, question mark, or Chinese equivalents)
             const sentenceEnders = ['.', '!', '?', '。', '！', '？'];
             let sentenceStart = 0;
             for (const ender of sentenceEnders) {
@@ -110,7 +108,6 @@ export const ReadingSessionView = ({
       }
     }
 
-    // Call prop method to update parent state
     onTextSelect({
       text: selectedText,
       type: type,
@@ -128,86 +125,109 @@ export const ReadingSessionView = ({
     setIsPopupOpen(true);
   };
 
-  // FIX: This function was problematic.
-  // 1. It accessed 'props.selection' incorrectly.
-  // 2. It called API directly instead of using the Context action.
-  // 3. We now use the `onSaveWord` prop which connects to `ViewRenderer` -> `addWord` (Context).
   const handleSaveToDeck = (wordData: any) => {
-    // Construct the payload expected by onSaveWord
     onSaveWord({
       ...wordData,
-      // Use the selection prop passed to the component if context isn't in wordData
       context: wordData.context || selection?.text,
     });
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-900 text-slate-200">
-      {/* Header */}
-      <header className="bg-slate-800/80 backdrop-blur-md p-4 flex items-center justify-between border-b border-slate-700/50 flex-shrink-0 sticky top-0 z-20">
+    // Changed bg to a subtle gradient for depth
+    <div className="flex flex-col h-screen bg-gradient-to-br from-slate-900 to-[#0f172a] text-slate-200 selection:bg-sky-500/30 selection:text-sky-200">
+      
+      {/* Header - Made simpler, removed the big title to reduce distraction */}
+      <header className="flex-shrink-0 px-6 py-4 flex items-center justify-between bg-slate-900/50 backdrop-blur-sm z-20 border-b border-white/5">
         <button
           onClick={onGoBack}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-700 hover:text-white transition-all"
+          className="group flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
         >
-          <ArrowLeftIcon className="w-5 h-5" />
+          <ArrowLeftIcon className="w-5 h-5 opacity-70 group-hover:opacity-100 group-hover:-translate-x-1 transition-transform" />
           <span className="hidden md:inline">Back to Library</span>
         </button>
 
-        <h1 className="text-lg font-bold text-white text-center flex-grow truncate px-4">
-          {typeof title === "string" ? title : "Reading Session"}
-        </h1>
+        {/* Small breadcrumb title for context */}
+        <div className="text-sm font-medium text-slate-500 flex items-center gap-2">
+           <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+           <span className="truncate max-w-[200px]">{typeof title === "string" ? title : "Reading Session"}</span>
+        </div>
 
         <div className="flex items-center gap-3">
           {onGenerateExercises && (
             <button
               onClick={onGenerateExercises}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium text-sky-400 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 transition-all"
-              title="Generate grammar exercises from this text"
+              className="px-4 py-2 rounded-lg text-sm font-medium text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 transition-all hover:shadow-[0_0_15px_rgba(14,165,233,0.15)]"
             >
               <span className="hidden md:inline">Generate Exercises</span>
               <span className="md:hidden">Exercises</span>
             </button>
           )}
-          <div className="hidden md:flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-mono">READER MODE</span>
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+          
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-full border border-white/5">
+            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Reader Mode</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>
           </div>
         </div>
       </header>
 
-      <div className="flex-grow flex flex-col lg:flex-row gap-0 lg:gap-8 p-0 md:p-8 overflow-hidden">
+      {/* Main Content Area - Added padding to create a floating effect */}
+      <div className="flex-grow flex flex-col lg:flex-row gap-6 p-4 md:p-6 lg:p-8 overflow-hidden">
+        
+        {/* Text Container - The "Paper" */}
         <div
           onMouseUp={handleSelection}
-          className="w-full lg:flex-[2] overflow-y-auto p-6 md:p-0 custom-scrollbar"
+          className="w-full lg:flex-[2] overflow-y-auto custom-scrollbar rounded-2xl bg-slate-800/40 border border-white/5 shadow-xl relative"
         >
-          <div className="max-w-3xl mx-auto">
-            <HighlightedText
-              text={content}
-              wordBank={wordBank}
-              onFirstHighlight={onFirstHighlight}
-              onWordClick={handleKnownWordClick}
-            />
-            <div className="h-64"></div>
+          <div className="max-w-3xl mx-auto py-12 px-8 md:px-12 min-h-full">
+            
+            {/* Title moved inside the document for a book-like feel */}
+            <div className="mb-10 border-b border-slate-700/50 pb-6">
+              <h1 className="text-3xl md:text-4xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 leading-tight">
+                {typeof title === "string" ? title : "Reading Session"}
+              </h1>
+            </div>
+
+            {/* Typography adjustments for the content */}
+            <div className="font-serif text-lg md:text-xl leading-loose tracking-wide text-slate-300">
+              <HighlightedText
+                text={content}
+                wordBank={wordBank}
+                onFirstHighlight={onFirstHighlight}
+                onWordClick={handleKnownWordClick}
+              />
+            </div>
+            
+            {/* Footer space */}
+            <div className="h-32 flex items-center justify-center text-slate-600 italic text-sm mt-12">
+               End of text
+            </div>
           </div>
         </div>
 
+        {/* Sidebar - Floating Glass Card */}
         {analysisDisplayMode === "panel" && (
-          <div className="hidden lg:block w-full lg:flex-[1] overflow-y-auto h-full bg-slate-800/30 border-l border-slate-700/50 rounded-t-3xl lg:rounded-none">
-            <MarginaliaPanel
-              selection={selection}
-              analysisResult={analysisResult}
-              isLoading={isLoading}
-              isDeepLoading={isDeepLoading}
-              onRequestDeepAnalysis={onRequestDeepAnalysis}
-              onPlayAudio={onPlayAudio}
-              onSaveWord={handleSaveToDeck} // Connect local handler to Panel
-              isWordInBank={isWordInBank}
-              wordBank={wordBank}
-            />
+          <div className="hidden lg:block w-full lg:w-[400px] xl:w-[450px] flex-shrink-0 h-full">
+            <div className="h-full bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+              {/* Optional: Add a subtle header to the panel if needed, or leave it to MarginaliaPanel */}
+              <div className="flex-grow overflow-y-auto custom-scrollbar p-1">
+                <MarginaliaPanel
+                  selection={selection}
+                  analysisResult={analysisResult}
+                  isLoading={isLoading}
+                  isDeepLoading={isDeepLoading}
+                  onRequestDeepAnalysis={onRequestDeepAnalysis}
+                  onPlayAudio={onPlayAudio}
+                  onSaveWord={handleSaveToDeck}
+                  isWordInBank={isWordInBank}
+                  wordBank={wordBank}
+                />
+              </div>
+            </div>
           </div>
         )}
       </div>
 
+      {/* Popup Handling */}
       {isPopupOpen && analysisDisplayMode === "popup" && (
         <AnalysisPopup
           selection={selection}
@@ -217,7 +237,7 @@ export const ReadingSessionView = ({
           onRequestDeepAnalysis={onRequestDeepAnalysis}
           onPlayAudio={onPlayAudio}
           onClose={() => setIsPopupOpen(false)}
-          onSaveWord={handleSaveToDeck} // Connect local handler to Popup
+          onSaveWord={handleSaveToDeck}
           isWordInBank={isWordInBank}
           wordBank={wordBank}
         />

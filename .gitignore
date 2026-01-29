@@ -41,3 +41,6 @@ backend/*.pyo
 backend/*.pyd
 backend/venv/
 backend\__pycache__
+backend\*.pyc
+backend/.env
+backend/.venv

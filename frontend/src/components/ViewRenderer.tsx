@@ -76,7 +76,7 @@ export const ViewRenderer: React.FC = () => {
     // Prepare payload for /vocab/capture (backwards-compatible with older POST /words)
     const payload = {
       term: wordData.term,
-      deck_id: wordData.deck_id || wordData.deckId || 1,
+      deck_id: wordData.deck_id || wordData.deckId || null,
       context: context,
       reading_content_id: activeReadingText.id || undefined,
       analysis: wordData.analysis || undefined,

@@ -1,4 +1,5 @@
 from typing import List, Optional, Dict, Any
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from jinja2 import Template
 
@@ -8,7 +9,7 @@ class CardService:
     """Service for creating flashcards from words with template rendering."""
 
     @staticmethod
-    def get_template(db: Session, template_id: Optional[int] = None) -> Optional[models.CardTemplate]:
+    def get_template(db: Session, template_id: Optional[str] = None) -> Optional[models.CardTemplate]:
         """Get a card template by ID or fall back to default 'Basic' template.
 
         Args:
@@ -87,8 +88,8 @@ class CardService:
     def create_card_from_word(
         db: Session,
         word: models.Word,
-        template_id: Optional[int] = None,
-        deck_id_override: Optional[int] = None
+        template_id: Optional[str] = None,
+        deck_id_override: Optional[str] = None
     ) -> models.Card:
         """Create a single card from a word using the specified template.
 
@@ -105,12 +106,32 @@ class CardService:
         context = CardService.build_context_from_word(word)
         front, back = CardService.render_card_content(template, context)
 
+        # Ensure we have content for the card
+        if not front or not front.strip():
+            front = word.term or "No content"
+        if not back or not back.strip():
+            # Build a comprehensive back side
+            back_parts = []
+            if word.translation:
+                back_parts.append(f"Translation: {word.translation}")
+            if word.part_of_speech:
+                back_parts.append(f"Part of Speech: {word.part_of_speech}")
+            if word.context:
+                back_parts.append(f"Context: {word.context}")
+            back = "\n\n".join(back_parts) if back_parts else "No translation available"
+
+        # New cards should be immediately due for first review
+        # Set next_review_date to 1 minute ago so they show up in due cards
         card = models.Card(
             deck_id=deck_id_override or word.deck_id,
             template_id=template.id if template else None,
             front=front,
             back=back,
             word_id=word.id,
+            next_review_date=datetime.utcnow() - timedelta(minutes=1),
+            repetition=0,
+            easiness_factor=2.5,
+            interval=0
         )
 
         return card
@@ -119,8 +140,8 @@ class CardService:
     def bulk_create_cards_from_words(
         db: Session,
         words: List[models.Word],
-        template_id: Optional[int] = None,
-        deck_id_override: Optional[int] = None,
+        template_id: Optional[str] = None,
+        deck_id_override: Optional[str] = None,
         commit: bool = True
     ) -> List[models.Card]:
         """Create multiple cards from a list of words efficiently.
@@ -167,9 +188,9 @@ class CardService:
     @staticmethod
     def bulk_create_cards_from_word_ids(
         db: Session,
-        word_ids: List[int],
-        template_id: Optional[int] = None,
-        deck_id_override: Optional[int] = None,
+        word_ids: List[str],
+        template_id: Optional[str] = None,
+        deck_id_override: Optional[str] = None,
         commit: bool = True
     ) -> List[models.Card]:
         """Create multiple cards from a list of word IDs efficiently.
@@ -208,8 +229,8 @@ class CardService:
     @staticmethod
     def bulk_create_cards_for_deck(
         db: Session,
-        deck_id: int,
-        template_id: Optional[int] = None,
+        deck_id: str,
+        template_id: Optional[str] = None,
         commit: bool = True
     ) -> List[models.Card]:
         """Create cards for all words in a deck.

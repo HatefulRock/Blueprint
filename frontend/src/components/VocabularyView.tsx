@@ -8,6 +8,23 @@ import { SpeakerWaveIcon } from './icons/SpeakerWaveIcon';
 import { ClockIcon } from './icons/ClockIcon';
 import { wordService } from '../services/api';
 
+const TrashIcon = ({ className }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    strokeWidth={1.5}
+    stroke="currentColor"
+    className={className}
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
+    />
+  </svg>
+);
+
 type SortKey = 'term' | 'familiarity_score' | 'next_review_date';
 type SortDirection = 'asc' | 'desc';
 
@@ -180,6 +197,75 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio, ref
       setWordDetail(null);
   }
 
+  const handleDeleteWord = async (wordId: ID, wordTerm: string) => {
+    if (!window.confirm(`Are you sure you want to delete "${wordTerm}"? This will also delete any flashcards associated with this word.`)) {
+      return;
+    }
+
+    try {
+      await wordService.deleteWord(wordId);
+
+      if ((window as any).appSetToast) {
+        (window as any).appSetToast({
+          type: 'success',
+          message: `Deleted "${wordTerm}" and associated cards`
+        });
+      }
+
+      // Refresh the word list
+      if (refreshWords) {
+        await refreshWords();
+      }
+
+      // Close expanded view if it was open
+      if (expandedTerm === wordTerm) {
+        setExpandedTerm(null);
+      }
+    } catch (e) {
+      console.error('Failed to delete word', e);
+      if ((window as any).appSetToast) {
+        (window as any).appSetToast({ type: 'error', message: 'Failed to delete word' });
+      }
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const selectedIds = getSelectedWordIds();
+    if (selectedIds.length === 0) {
+      (window as any).appSetToast?.({ type: 'info', message: 'No words selected' });
+      return;
+    }
+
+    const wordCount = selectedIds.length;
+    if (!window.confirm(`Are you sure you want to delete ${wordCount} word${wordCount !== 1 ? 's' : ''}? This will also delete any associated flashcards.`)) {
+      return;
+    }
+
+    try {
+      const result = await wordService.bulkDeleteWords(selectedIds);
+
+      if ((window as any).appSetToast) {
+        (window as any).appSetToast({
+          type: 'success',
+          message: `Deleted ${result.words_deleted} word${result.words_deleted !== 1 ? 's' : ''} and ${result.cards_deleted} card${result.cards_deleted !== 1 ? 's' : ''}`
+        });
+      }
+
+      // Clear selection
+      clearSelection();
+
+      // Refresh the word list
+      if (refreshWords) {
+        await refreshWords();
+      }
+    } catch (e) {
+      console.error('Failed to bulk delete words', e);
+      if ((window as any).appSetToast) {
+        (window as any).appSetToast({ type: 'error', message: 'Failed to delete words' });
+      }
+    }
+  };
+
   const handleAssignToDeck = async (wordIds: ID[]) => {
     setWordsToAssign(wordIds);
     
@@ -285,7 +371,7 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio, ref
       <div className="flex-1 p-6 md:p-8">
         <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
           <h2 className="text-3xl font-bold text-white">My Vocabulary</h2>
-              <div className="flex items-center gap-4 flex-wrap"> 
+              <div className="flex items-center gap-4 flex-wrap">
               <div className="flex items-center gap-2">
                 <button onClick={() => {
                   const ids = getSelectedWordIds();
@@ -294,9 +380,17 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio, ref
                     return;
                   }
                   handleAssignToDeck(ids);
-                }} className="px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-md">Add to Deck</button>
+                }} className="px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-md transition-colors">Add to Deck</button>
 
-                <button onClick={() => { clearSelection(); }} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md">Clear Selection</button>
+                <button
+                  onClick={handleBulkDelete}
+                  className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
+                  title="Delete selected words and their flashcards"
+                >
+                  Delete Selected
+                </button>
+
+                <button onClick={() => { clearSelection(); }} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md transition-colors">Clear Selection</button>
               </div>
           <input
             type="text"
@@ -319,12 +413,13 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio, ref
           <table className="w-full text-left">
             <thead className="bg-slate-700/50">
               <tr>
-                <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider w-1/4">Select</th>
-                <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider w-1/4">Word</th>
-                <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider hidden md:table-cell w-1/3">Context</th>
-                <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider w-1/6">Review</th>
-                <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider w-1/12 text-center">Audio</th>
-                <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider text-right w-1/4">Familiarity</th>
+                <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider">Select</th>
+                <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider">Word</th>
+                <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider hidden md:table-cell">Context</th>
+                <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider">Review</th>
+                <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider text-center">Audio</th>
+                <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider text-right">Familiarity</th>
+                <th className="p-4 text-sm font-semibold text-slate-300 uppercase tracking-wider text-center">Actions</th>
                 <th className="p-4 w-12"></th>
               </tr>
             </thead>
@@ -377,6 +472,15 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio, ref
                             </ActionButton>
                         </div>
                     </td>
+                    <td className="p-4 text-center align-top">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handleDeleteWord(word.id, word.term); }}
+                            className="p-1.5 rounded-md bg-slate-700 text-slate-400 hover:bg-red-600 hover:text-white transition-colors"
+                            title={`Delete ${word.term}`}
+                        >
+                            <TrashIcon className="w-4 h-4" />
+                        </button>
+                    </td>
                       <td className="p-4 text-center">
                         <div className="flex items-center justify-center gap-2">
                           <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${expandedTerm === word.term ? 'rotate-180' : ''}`} />
@@ -385,7 +489,7 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio, ref
                   </tr>
                    {expandedTerm === word.term && (
                      <tr className="bg-slate-900/50">
-                       <td colSpan={6} className="p-0">
+                       <td colSpan={8} className="p-0">
                          <div className="p-6 flex flex-col md:flex-row gap-6">
                            <div className="space-y-4 flex-grow">
                              <h3 className="text-md font-bold text-white">Analysis Details</h3>
@@ -401,7 +505,18 @@ export const VocabularyView = ({ wordBank, onFamiliarityChange, onPlayAudio, ref
                            <div className="w-80">
                              <h4 className="text-sm font-semibold text-sky-400 mb-2">Actions</h4>
                              <div className="flex flex-col gap-2">
-                                 <button onClick={(e) => { e.stopPropagation(); handleAssignToDeck([word.id]); }} className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md">Add to Deck</button>
+                                 <button
+                                   onClick={(e) => { e.stopPropagation(); handleAssignToDeck([word.id]); }}
+                                   className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md transition-colors"
+                                 >
+                                   Add to Deck
+                                 </button>
+                                 <button
+                                   onClick={(e) => { e.stopPropagation(); handleDeleteWord(word.id, word.term); }}
+                                   className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
+                                 >
+                                   Delete Word
+                                 </button>
                              </div>
                            </div>
                          </div>

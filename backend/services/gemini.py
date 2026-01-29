@@ -43,7 +43,9 @@ class GeminiService:
         - translation: Natural English translation.
         - literal_translation: Word-for-word translation.
         - grammar_breakdown: Detailed explanation of grammar used.
-        - vocabulary: A list of objects like {{"term": "...", "pos": "...", "translation": "...", "pinyin": "..."}}
+        - vocabulary: A list of objects. Each object MUST have: {{"term": "...", "pos": "...", "translation": "...", "pinyin": "..."}}
+          IMPORTANT: For Chinese text, ALWAYS include pinyin romanization (e.g., "nǐ hǎo" for "你好").
+          For Japanese, include romaji. For other languages, include pronunciation guide if helpful, or use empty string.
         - difficulty_level: A1, A2, B1, B2, C1, or C2.
         - usage_examples: Array of 2-3 example sentences showing usage. Each object: {{"example": "sentence in {target_language}", "translation": "English translation"}}
         - memory_aid: A mnemonic, character breakdown, or helpful tip to remember this word (only for single words)

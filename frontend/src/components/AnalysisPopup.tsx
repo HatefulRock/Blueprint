@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { AnalysisResult, Selection, Word } from '../types';
 import { SparklesIcon } from './icons/SparklesIcon';
@@ -13,7 +12,7 @@ interface AnalysisPopupProps {
   onRequestDeepAnalysis: () => void;
   onPlayAudio: (text: string) => void;
   onClose: () => void;
-  onSaveWord: (wordData: Omit<Word, 'familiarityScore' | 'language' | 'context'> & { context?: string }) => void;
+  onSaveWord: (wordData: any) => void; // Relaxed type to allow Partial<Word> creation
   isWordInBank: boolean;
   wordBank?: Word[];
 }
@@ -46,13 +45,14 @@ export const AnalysisPopup = ({ selection, analysisResult, isLoading, isDeepLoad
 
     setIsSaving(true);
 
+    // FIX: Flatten structure and use snake_case to match backend 'Word' model
     await onSaveWord({
         term: selection.text,
-        analysis: {
-            translation: analysisResult.translation,
-            literalTranslation: analysisResult.literalTranslation || "N/A",
-            grammaticalBreakdown: analysisResult.grammaticalBreakdown || "No detailed breakdown available."
-        }
+        translation: analysisResult.translation,
+        literal_translation: analysisResult.literalTranslation || "N/A",
+        grammatical_breakdown: analysisResult.grammaticalBreakdown || "No detailed breakdown available.",
+        part_of_speech: analysisResult.partOfSpeech || null,
+        context: analysisResult.contextSentence || ""
     });
 
     // Brief delay to show the success state
@@ -63,14 +63,14 @@ export const AnalysisPopup = ({ selection, analysisResult, isLoading, isDeepLoad
   };
 
   const handleSaveBreakdownWord = (term: string, translation: string, partOfSpeech: string) => {
+      // FIX: Flatten structure and use snake_case to match backend 'Word' model
       onSaveWord({
           term: term,
           context: selection?.text || "",
-          analysis: {
-              translation: translation,
-              literalTranslation: translation,
-              grammaticalBreakdown: `${partOfSpeech}. Found in sentence: "${selection?.text}"`
-          }
+          translation: translation,
+          literal_translation: translation,
+          grammatical_breakdown: `${partOfSpeech}. Found in sentence: "${selection?.text}"`,
+          part_of_speech: partOfSpeech
       });
   };
 
@@ -200,16 +200,21 @@ export const AnalysisPopup = ({ selection, analysisResult, isLoading, isDeepLoad
                                 const isBreakdownWordSaved = wordBank.some(w => w.term.toLowerCase() === wb.term.toLowerCase());
                                 return (
                                     <div key={idx} className="flex items-center justify-between bg-slate-700/30 p-3 rounded-lg border border-slate-700 hover:bg-slate-700/50 transition-colors">
-                                        <div>
-                                            <p className="font-bold text-emerald-300">{wb.term}</p>
+                                        <div className="flex-1">
+                                            <div className="flex items-baseline gap-2">
+                                                <p className="font-bold text-emerald-300">{wb.term}</p>
+                                                {wb.pinyin && wb.pinyin.trim() && (
+                                                    <p className="text-xs text-pink-400 font-mono">{wb.pinyin}</p>
+                                                )}
+                                            </div>
                                             <p className="text-xs text-slate-400">{wb.partOfSpeech} • {wb.translation}</p>
                                         </div>
                                         <button
                                             onClick={() => handleSaveBreakdownWord(wb.term, wb.translation, wb.partOfSpeech)}
                                             disabled={isBreakdownWordSaved}
-                                            className={`p-1.5 rounded-md transition-colors ${
-                                                isBreakdownWordSaved 
-                                                ? 'text-emerald-500' 
+                                            className={`p-1.5 rounded-md transition-colors flex-shrink-0 ${
+                                                isBreakdownWordSaved
+                                                ? 'text-emerald-500'
                                                 : 'text-slate-400 hover:bg-emerald-600 hover:text-white'
                                             }`}
                                             title={isBreakdownWordSaved ? "Already in vocabulary" : "Add to vocabulary"}

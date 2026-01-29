@@ -225,16 +225,49 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
     }, []);
 
     const getDeckStats = useCallback((deckId: string | null) => {
-        const relevantWords = deckId === null 
-            ? wordBank 
+        // For flashcards, we should count CARDS, not words
+        // Since we don't have cards loaded in state, we'll fetch them when needed
+        // For now, return approximate stats based on words
+        const relevantWords = deckId === null
+            ? wordBank
             : wordBank.filter(w => w.deck_id === deckId);
-        
-        const now = new Date();
+
         const total = relevantWords.length;
-        const due = relevantWords.filter(w => !w.next_review_date || new Date(w.next_review_date) <= now).length;
-        
+        // Note: This is an approximation. The actual due count should come from cards, not words
+        const due = 0; // Will be updated by fetchDeckStats
+
         return { total, due };
     }, [wordBank]);
+
+    // Fetch actual card stats from server
+    const [deckCardStats, setDeckCardStats] = useState<Map<string, {total: number, due: number}>>(new Map());
+
+    const fetchDeckStats = useCallback(async (deckId: string) => {
+        try {
+            const allCards: any = await wordService.getCardsForDeck(deckId);
+            const dueCards: any = await wordService.getDueCards(deckId);
+
+            setDeckCardStats(prev => {
+                const updated = new Map(prev);
+                updated.set(deckId, {
+                    total: allCards.length || 0,
+                    due: dueCards.length || 0
+                });
+                return updated;
+            });
+        } catch (err) {
+            console.error('Failed to fetch deck stats:', err);
+        }
+    }, []);
+
+    // Refresh stats for all decks when component mounts or after changes
+    useEffect(() => {
+        decks.forEach(deck => {
+            if (deck.id) {
+                fetchDeckStats(deck.id);
+            }
+        });
+    }, [decks, fetchDeckStats]);
     
     const handleStartSession = useCallback(async (deckId: string | null) => {
         setIsLoading(true);
@@ -259,12 +292,64 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
                 queue = res.cards || [];
             }
 
+            if (queue.length === 0) {
+                // No cards available - show helpful message
+                if (deckId !== null) {
+                    // Check if deck has words but no cards
+                    const deckWords = wordBank.filter(w => w.deck_id === deckId);
+                    if (deckWords.length > 0) {
+                        // Offer to generate cards
+                        const shouldGenerate = window.confirm(
+                            `This deck has ${deckWords.length} word(s) but no flashcards yet. Would you like to generate flashcards now?`
+                        );
+                        if (shouldGenerate) {
+                            try {
+                                await wordService.bulkCreateFromDeck(deckId);
+                                alert('Flashcards generated successfully! Starting study session...');
+                                // Retry fetching due cards
+                                const newRes: any = await wordService.getDueCards(deckId);
+                                queue = Array.isArray(newRes) ? newRes : [];
+
+                                if (queue.length === 0) {
+                                    alert('Cards were generated but none are due yet. This is unusual - please try again.');
+                                    setIsLoading(false);
+                                    return;
+                                }
+                            } catch (err) {
+                                console.error('Failed to generate cards:', err);
+                                alert('Failed to generate flashcards. Please try again.');
+                                setIsLoading(false);
+                                return;
+                            }
+                        } else {
+                            setIsLoading(false);
+                            return;
+                        }
+                    } else {
+                        alert('This deck has no words yet. Add some vocabulary first!');
+                        setIsLoading(false);
+                        return;
+                    }
+                } else {
+                    alert('No cards are due for review right now. Great job!');
+                    setIsLoading(false);
+                    return;
+                }
+            }
+
+            if (queue.length === 0) {
+                alert('No cards available for study.');
+                setIsLoading(false);
+                return;
+            }
+
             setReviewQueue(queue);
             setCurrentIndex(0);
             setIsFlipped(false);
             setViewState('study');
         } catch (error) {
             console.error("Failed to start session", error);
+            alert('Failed to start study session. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -430,6 +515,10 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
 
     const handleComplete = () => {
         onSessionComplete(reviewMode);
+        // Refresh deck stats after completing a session
+        if (selectedDeckId) {
+            fetchDeckStats(selectedDeckId);
+        }
         setViewState('decks');
     }
 
@@ -476,7 +565,11 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
 
     // --- VIEW: DECKS ---
     if (viewState === 'decks') {
-        const allStats = getDeckStats(null);
+        // Calculate "All Vocabulary" stats from all deck stats
+        const allStats = Array.from(deckCardStats.values()).reduce(
+            (acc, stats) => ({ total: acc.total + stats.total, due: acc.due + stats.due }),
+            { total: 0, due: 0 }
+        );
 
          return (
             <div className="flex-1 p-6 md:p-8">
@@ -630,7 +723,7 @@ export const FlashcardView = ({ wordBank, onFamiliarityChange, onSessionComplete
 
                     {/* User Decks */}
                     {decks.map(deck => {
-                        const stats = getDeckStats(deck.id);
+                        const stats = deckCardStats.get(deck.id) || { total: 0, due: 0 };
                         return (
                             <div
                                 key={deck.id}

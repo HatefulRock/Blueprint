@@ -425,7 +425,7 @@ class VocabularyItem(BaseModel):
     term: str
     pos: str = Field(description="Part of speech (e.g., noun, verb)")
     translation: str
-    pinyin: Optional[str] = Field(None, description="Pronunciation guide if applicable (e.g. for Chinese/Japanese)")
+    pinyin: str = Field(default="", description="Pronunciation guide (required for Chinese/Japanese, empty string for others)")
 
 class AnalysisResponse(BaseModel):
     """
@@ -538,6 +538,7 @@ class BulkCardCreate(BaseModel):
     deck_id: Optional[UUID] = None
 
 class StudySessionRequest(BaseModel):
-    deck_id: UUID
+    deck_id: Optional[UUID] = None
     session_date: date = Field(default_factory=date.today)
     duration_minutes: Optional[int] = None
+    limit: Optional[int] = 20

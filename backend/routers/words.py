@@ -55,12 +55,43 @@ def create_card(
 
 @router.get("/cards/deck/{deck_id}", response_model=List[schemas.CardRead])
 def get_cards_for_deck(
-    deck_id: str, 
+    deck_id: str,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     get_deck_or_404(db, deck_id, current_user.id)
     return db.query(models.Card).filter(models.Card.deck_id == deck_id).all()
+
+@router.get("/cards/due/{deck_id}", response_model=List[schemas.CardRead])
+def get_due_cards_for_deck(
+    deck_id: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all cards that are due for review in a specific deck.
+    Cards are due if their next_review_date is today or earlier.
+    """
+    get_deck_or_404(db, deck_id, current_user.id)
+
+    today = datetime.utcnow()
+
+    # Get all cards to see what's there
+    all_cards = db.query(models.Card).filter(models.Card.deck_id == deck_id).all()
+    logger.info(f"Total cards in deck {deck_id}: {len(all_cards)}")
+
+    if all_cards:
+        # Log the next_review_dates to debug
+        for card in all_cards[:3]:  # Log first 3
+            logger.info(f"Card {card.id}: next_review_date={card.next_review_date}, now={today}, due={card.next_review_date <= today}")
+
+    due_cards = db.query(models.Card).filter(
+        models.Card.deck_id == deck_id,
+        models.Card.next_review_date <= today
+    ).all()
+
+    logger.info(f"Found {len(due_cards)} due cards for deck {deck_id} (out of {len(all_cards)} total)")
+    return due_cards
 
 @router.post("/cards/from_word/{word_id}", response_model=schemas.CardRead)
 def create_card_from_word(
@@ -86,23 +117,56 @@ def create_card_from_word(
         logger.error(f"Template rendering failed for word {word_id}: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Failed to generate card: {str(e)}")
 
-@router.post("/cards/from_deck/{deck_id}")
-def enqueue_generate_deck_cards(
-    deck_id: str, 
-    template_id: Optional[str] = None, 
+@router.post("/cards/from_deck/{deck_id}", response_model=List[schemas.CardRead])
+def generate_cards_for_deck(
+    deck_id: str,
+    template_id: Optional[str] = None,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Generate flashcards for all words in a deck that don't have cards yet.
+    Synchronous version - generates cards immediately.
+    """
     get_deck_or_404(db, deck_id, current_user.id)
-    
+
     try:
-        from ..workers.card_generator import enqueue_generate_cards_for_deck
-        job_id = enqueue_generate_cards_for_deck(deck_id, template_id)
-        logger.info(f"Enqueued card generation job {job_id} for deck {deck_id}")
-        return {"job_id": job_id}
+        # Get all words in this deck
+        words = db.query(models.Word).filter(models.Word.deck_id == deck_id).all()
+
+        if not words:
+            logger.info(f"No words found in deck {deck_id}")
+            return []
+
+        # Filter out words that already have cards
+        words_without_cards = []
+        for word in words:
+            existing_card = db.query(models.Card).filter(
+                models.Card.word_id == word.id
+            ).first()
+            if not existing_card:
+                words_without_cards.append(word)
+
+        if not words_without_cards:
+            logger.info(f"All words in deck {deck_id} already have cards")
+            return []
+
+        # Generate cards for words without cards
+        created_cards = CardService.bulk_create_cards_from_words(
+            db=db,
+            words=words_without_cards,
+            template_id=template_id,
+            deck_id_override=None,
+            commit=True
+        )
+
+        logger.info(f"Created {len(created_cards)} cards for deck {deck_id}")
+        return created_cards
+
     except Exception as e:
-        logger.error(f"Failed to enqueue job for deck {deck_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Background worker unavailable")
+        db.rollback()
+        logger.error(f"Failed to generate cards for deck {deck_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Card generation failed: {str(e)}")
 
 @router.post("/cards/bulk_from_words", response_model=List[schemas.CardRead])
 def bulk_create_cards_from_word_ids(
@@ -301,23 +365,96 @@ def update_word(
 
 @router.delete("/{word_id}")
 def delete_word(
-    word_id: str, 
+    word_id: str,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Delete a word and optionally its associated cards.
+    By default, deletes associated cards to maintain consistency.
+    """
     word = db.query(models.Word).filter(models.Word.id == word_id).first()
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
-    
+
     get_deck_or_404(db, word.deck_id, current_user.id)
 
     try:
+        # Delete associated cards first (since card.word_id has ondelete="SET NULL")
+        # We explicitly delete them to remove orphaned cards
+        associated_cards = db.query(models.Card).filter(models.Card.word_id == word_id).all()
+        cards_deleted = len(associated_cards)
+
+        for card in associated_cards:
+            db.delete(card)
+
+        # Delete the word (this will cascade to word_contexts automatically)
         db.delete(word)
         db.commit()
-        return {"message": "Word deleted", "id": word_id}
-    except SQLAlchemyError:
+
+        logger.info(f"Deleted word {word_id} and {cards_deleted} associated cards for user {current_user.id}")
+        return {
+            "message": "Word and associated cards deleted",
+            "id": word_id,
+            "cards_deleted": cards_deleted
+        }
+    except SQLAlchemyError as e:
         db.rollback()
+        logger.error(f"Delete failed for word {word_id}: {str(e)}")
         raise HTTPException(status_code=500, detail="Delete operation failed")
+
+@router.post("/bulk_delete")
+def bulk_delete_words(
+    word_ids: List[str] = Body(..., embed=True),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete multiple words and their associated cards in a single operation.
+    """
+    if not word_ids:
+        raise HTTPException(status_code=400, detail="No word IDs provided")
+
+    try:
+        total_cards_deleted = 0
+        words_deleted = 0
+
+        for word_id in word_ids:
+            word = db.query(models.Word).filter(models.Word.id == word_id).first()
+            if not word:
+                logger.warning(f"Word {word_id} not found, skipping")
+                continue
+
+            # Verify ownership
+            try:
+                get_deck_or_404(db, word.deck_id, current_user.id)
+            except HTTPException:
+                logger.warning(f"User {current_user.id} doesn't own word {word_id}, skipping")
+                continue
+
+            # Delete associated cards
+            associated_cards = db.query(models.Card).filter(models.Card.word_id == word_id).all()
+            total_cards_deleted += len(associated_cards)
+
+            for card in associated_cards:
+                db.delete(card)
+
+            # Delete the word
+            db.delete(word)
+            words_deleted += 1
+
+        db.commit()
+
+        logger.info(f"Bulk deleted {words_deleted} words and {total_cards_deleted} cards for user {current_user.id}")
+        return {
+            "message": "Bulk delete completed",
+            "words_deleted": words_deleted,
+            "cards_deleted": total_cards_deleted
+        }
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Bulk delete failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Bulk delete operation failed")
 
 # --- Templates & Decks ---
 

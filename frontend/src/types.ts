@@ -30,6 +30,7 @@ export interface AnalysisResult {
     term: string;
     translation: string;
     partOfSpeech: string;
+    pinyin?: string;
   }>;
   difficultyLevel?: string;
   usageExamples?: UsageExample[];

@@ -47,7 +47,7 @@ export const HighlightedText = ({
 
       if (wordData) {
         // 4. Dynamic styling based on familiarity
-        const isMastered = wordData.familiarityScore >= 4;
+        const isMastered = wordData.familiarity_score >= 4;
         const colorClass = isMastered
           ? "border-emerald-500/60 hover:bg-emerald-500/10"
           : "border-amber-500/60 hover:bg-amber-500/10";
@@ -67,10 +67,10 @@ export const HighlightedText = ({
             {/* Tooltip */}
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max px-3 py-2 bg-slate-800 border border-slate-600 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-30 shadow-xl">
                <div className="font-bold text-sky-400">
-                 {wordData.analysis?.translation ?? '—'}
+                 {wordData.translation ?? '—'}
                </div>
               <div className="text-slate-400 mt-1">
-                Mastery: {wordData.familiarityScore}/5
+                Mastery: {wordData.familiarity_score}/5
               </div>
             </div>
           </span>
