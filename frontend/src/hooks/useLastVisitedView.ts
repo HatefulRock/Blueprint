@@ -11,7 +11,7 @@ interface LastVisitedViews {
 
 const viewGroups: Record<string, View[]> = {
   learn: [View.Reader, View.Vocabulary, View.Conversation],
-  practice: [View.Flashcards, View.Grammar, View.Pronunciation, View.Practice],
+  practice: [View.Flashcards, View.Grammar, View.Practice],
   progress: [View.Analytics],
 };
 

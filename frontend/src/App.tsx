@@ -1,45 +1,46 @@
-import React from "react";
-import { AppProvider, useApp } from "./context/AppContext";
-import { Header } from "./components/Header";
-import { ViewRenderer } from "./components/ViewRenderer";
-import { ErrorToast } from "./components/ErrorToast";
-import { Toast } from "./components/Toast";
-import { LoginPage } from "./components/LoginPage";
-import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from "./components/KeyboardShortcutsHelp";
-import { View } from "./types";
+import React from 'react';
+import {
+  AppProvider,
+  useAuth,
+  useNavigation,
+  useVocabulary,
+  useSettings,
+  useToast,
+} from './context';
+import { Header } from './components/common/layout/Header';
+import { ViewRenderer } from './components/navigation/ViewRenderer';
+import { ErrorToast } from './components/common/feedback/ErrorToast';
+import { Toast } from './components/common/feedback/Toast';
+import { LoginPage } from './components/features/auth/LoginPage';
+import {
+  KeyboardShortcutsHelp,
+  useKeyboardShortcutsHelp,
+} from './components/KeyboardShortcutsHelp';
+import { View } from './types';
 
 // We create a sub-component to consume the Context
 const AppContent = () => {
+  const { isLoading: authLoading, user } = useAuth();
+  const { currentView, setCurrentView } = useNavigation();
+  const { wordBank } = useVocabulary();
   const {
-    isLoading,
-    user,
-    currentView,
-    setCurrentView,
-    wordBank,
     analysisDisplayMode,
     setAnalysisDisplayMode,
     targetLanguage,
     setTargetLanguage,
     uiLanguage,
     setUiLanguage,
-    // custom languages from settings
     customTargetLanguages,
-    addCustomTargetLanguage,
-    removeCustomTargetLanguage,
-    // 1. ADD THESE FROM CONTEXT
-    error,
-    setError,
-  } = useApp();
+  } = useSettings();
+  const { toast, hideToast } = useToast();
 
-  const [toast, setToast] = React.useState<{ type: 'success'|'error'|'info', message: string } | null>(null);
-  // expose a global setter for quick use in ad-hoc places
-  React.useEffect(() => { (window as any).appSetToast = (t: any) => setToast(t); return () => { (window as any).appSetToast = undefined }; }, []);
+  // Error state (keep local for now)
+  const [error, setError] = React.useState<string | null>(null);
 
   // Keyboard shortcuts help
   const keyboardHelp = useKeyboardShortcutsHelp();
 
-
-  if (isLoading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-sky-500"></div>
@@ -53,20 +54,20 @@ const AppContent = () => {
   }
 
   const builtInTargetLanguages = [
-    { code: "Chinese", name: "Chinese" },
-    { code: "Spanish", name: "Spanish" },
-    { code: "French", name: "French" },
+    { code: 'Chinese', name: 'Chinese' },
+    { code: 'Spanish', name: 'Spanish' },
+    { code: 'French', name: 'French' },
   ];
 
   const supportedLanguages = {
     target: [...builtInTargetLanguages, ...(customTargetLanguages || [])],
-    ui: [{ code: "English", name: "English" }],
+    ui: [{ code: 'English', name: 'English' }],
   };
 
   return (
     <div className="min-h-screen bg-slate-900">
       {currentView !== View.ReadingSession && (
-          <Header
+        <Header
           currentView={currentView}
           setCurrentView={setCurrentView}
           wordCount={wordBank?.length ?? 0}
@@ -81,18 +82,16 @@ const AppContent = () => {
       )}
 
       <main
-        className={
-          currentView === View.ReadingSession ? "" : "max-w-screen-2xl mx-auto"
-        }
+        className={currentView === View.ReadingSession ? '' : 'max-w-screen-2xl mx-auto'}
       >
         <ViewRenderer />
       </main>
 
-      {/* 2. ONLY RENDER IF ERROR EXISTS */}
+      {/* Error toast */}
       {error && <ErrorToast message={error} onClose={() => setError(null)} />}
 
       {/* Toast */}
-      <Toast toast={toast} onClose={() => setToast(null)} />
+      <Toast toast={toast} onClose={hideToast} />
 
       {/* Keyboard Shortcuts Help */}
       <KeyboardShortcutsHelp
@@ -124,7 +123,6 @@ const AppContent = () => {
           ?
         </span>
       </button>
-
     </div>
   );
 };

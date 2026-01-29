@@ -63,7 +63,6 @@ export enum View {
   Conversation = 'conversation',
   Dashboard = 'dashboard',
   Practice = 'practice',
-  Pronunciation = 'pronunciation',
   Writing = 'writing',
   Grammar = 'grammar',
   Analytics = 'analytics',
