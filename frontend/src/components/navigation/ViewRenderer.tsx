@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   useNavigation,
   useVocabulary,
@@ -11,7 +11,7 @@ import { usePracticeSession } from '../../hooks/usePracticeSession';
 import { useAnalysis } from '../../hooks/useAnalysis';
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { useAudio } from '../../hooks/useAudio';
-import { View, ActiveReadingText } from '../../types';
+import { View, ActiveReadingText, ReadingContent } from '../../types';
 
 // Dashboard
 import { DashboardView } from '../features/dashboard/DashboardView';
@@ -39,7 +39,7 @@ import { SettingsPage } from '../features/settings/SettingsPage';
 
 // Gemini Showcase
 import { GeminiShowcase } from '../features/showcase/GeminiShowcase';
-import { VideoLearningView } from '../features/showcase/VideoLearningView';
+import { VideoLearningView } from '../features/video/VideoLearningView';
 
 export const ViewRenderer: React.FC = () => {
   const { currentView, setCurrentView, navigateToReading } = useNavigation();
@@ -62,6 +62,7 @@ export const ViewRenderer: React.FC = () => {
   const { requestDeepAnalysis } = useAnalysis();
   const { handleTextSelect } = useTextSelection();
   const { playAudio } = useAudio();
+  const [activeVideo, setActiveVideo] = useState<ReadingContent | null>(null);
 
   // Helper: Start reading session
   const handleStartReadingSession = (data: ActiveReadingText) => {
@@ -77,6 +78,11 @@ export const ViewRenderer: React.FC = () => {
   const handleGoBack = () => {
     setCurrentView(View.Reader);
     setSelection(null);
+  };
+
+  const handleStartVideoSession = (videoData: ReadingContent) => {
+    setActiveVideo(videoData);
+    setCurrentView(View.VideoLearning);
   };
 
   switch (currentView) {
@@ -99,6 +105,7 @@ export const ViewRenderer: React.FC = () => {
       return (
         <ReaderView
           onStartReadingSession={handleStartReadingSession}
+          onStartVideoSession={handleStartVideoSession}
           onFetchArticle={async () => null}
           onFileUpload={async () => null}
           isFileProcessing={false}

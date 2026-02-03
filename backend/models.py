@@ -182,11 +182,23 @@ class PracticeReview(Base):
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
 
+class ConversationSession(Base):
+    __tablename__ = "conversation_sessions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    scenario = Column(String(100), nullable=False)
+    target_language = Column(String(50), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    messages = relationship("ConversationMessage", backref="session", cascade="all, delete-orphan")
+
+
 class ConversationMessage(Base):
     __tablename__ = "conversation_messages"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("practice_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("conversation_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
     author = Column(String(10))
     text = Column(Text, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow)

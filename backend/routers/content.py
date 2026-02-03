@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Union
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Form
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -176,6 +176,90 @@ async def upload_file(
     except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Database save failed")
+    
+@router.post("/upload-video")
+async def upload_video(
+    file: UploadFile = File(...),
+    target_language: str = Form("Spanish"),  # Receive target_language from FormData
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Uploads a video file, generates a simulated AI analysis (Transcript/Vocab),
+    and saves it to the VideoContent table.
+    """
+    safe_name = sanitize_filename(file.filename)
+    ext = Path(safe_name).suffix.lower()
+
+    # 1. Validation
+    if ext not in {".mp4", ".webm", ".mov"}:
+        raise HTTPException(status_code=400, detail="Allowed types: .mp4, .webm, .mov")
+    
+    # Check size (50MB limit)
+    # Note: verify your Nginx/Uvicorn config allows larger bodies if this fails in production
+    file.file.seek(0, 2)
+    file_size = file.file.tell()
+    await file.seek(0)
+    
+    if file_size > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (Max 50MB)")
+
+    # 2. Simulate AI Analysis 
+    # (In a real production app, this would be a background task using OpenAI Whisper + Gemini)
+    # We generate structured JSON to populate the DB so the frontend works immediately.
+    
+    # Mock Transcript based on filename context
+    mock_transcript = [
+        {"start_time": "00:01", "end_time": "00:05", "text": "Hola a todos, bienvenidos a este video.", "speaker": "Host"},
+        {"start_time": "00:06", "end_time": "00:10", "text": f"Hoy vamos a analizar el archivo {safe_name}.", "speaker": "Host"},
+        {"start_time": "00:11", "end_time": "00:15", "text": "Es un ejemplo excelente para aprender.", "speaker": "Host"},
+        {"start_time": "00:16", "end_time": "00:20", "text": "Presta atención al vocabulario nuevo.", "speaker": "Host"},
+    ]
+
+    mock_vocabulary = [
+        {"word": "Bienvenidos", "translation": "Welcome", "context": "Bienvenidos a este video", "timestamp": "00:01", "part_of_speech": "Adjective"},
+        {"word": "Analizar", "translation": "To Analyze", "context": "Vamos a analizar", "timestamp": "00:06", "part_of_speech": "Verb"},
+        {"word": "Ejemplo", "translation": "Example", "context": "Un ejemplo excelente", "timestamp": "00:11", "part_of_speech": "Noun"},
+    ]
+
+    mock_grammar = [
+        {"pattern": "Ir + a + Infinitive", "explanation": "Future plan construction (Vamos a analizar)", "examples": ["Voy a comer", "Vamos a ver"], "difficulty": "A2"}
+    ]
+
+    try:
+        # 3. Save to VideoContent Model
+        new_video = models.VideoContent(
+            user_id=current_user.id,
+            filename=safe_name,
+            target_language=target_language,
+            transcript=mock_transcript,
+            vocabulary=mock_vocabulary,
+            grammar_points=mock_grammar,
+            exercises={}, # Can populate later
+            difficulty_level="B1"
+        )
+        
+        db.add(new_video)
+        db.commit()
+        db.refresh(new_video)
+        
+        # 4. Return data formatted for the Frontend Library
+        # The frontend expects a 'ReadingContent' shape to add it to the list.
+        # We allow a temporary object URL on the frontend, but here we return metadata.
+        return {
+            "id": str(new_video.id),
+            "title": f"{safe_name} (Video)",
+            "content": "Video Transcript Available", # Placeholder for the list view
+            "source_url": safe_name, # Frontend uses this to detect it's a video
+            "difficulty_score": new_video.difficulty_level,
+            "created_at": new_video.created_at,
+            "language": target_language
+        }
+
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"DB Error saving video: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to save video content")
 
 @router.get("/", response_model=List[schemas.ContentRead])
 def get_user_content(

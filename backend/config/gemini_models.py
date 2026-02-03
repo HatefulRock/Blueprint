@@ -19,8 +19,8 @@ GEMINI_MODELS = {
     "reasoning": "gemini-3-flash-preview",      # For complex grammar/writing analysis
     "audio": "gemini-3-flash-preview",        # Audio transcription
     "vision": "gemini-3-flash-preview",       # NEW - For video/image analysis
-    "tts": "gemini-3-flash-preview",      # Text-to-speech
-    "live": "gemini-3-flash-preview",    # Real-time conversation
+    "tts": "gemini-2.5-flash-preview-tts",      # Text-to-speech
+    "live": "gemini-2.5-flash-native-audio-preview-12-2025",    # Real-time conversation (Live API)
 }
 
 # Model selection helpers

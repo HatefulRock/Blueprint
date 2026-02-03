@@ -96,9 +96,10 @@ export interface PronunciationFeedback {
 }
 
 export interface TranscriptMessage {
-  id: string;
-  author: 'user' | 'ai' | string;
+  id: number;
+  author: 'user' | 'ai';
   text: string;
+  timestamp?: Date;
   feedback?: PronunciationFeedback;
   isLoadingFeedback?: boolean;
   audioData?: string; // Base64 WAV for analysis context

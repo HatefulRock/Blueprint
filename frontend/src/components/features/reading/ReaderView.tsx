@@ -5,50 +5,18 @@ import { DocumentArrowUpIcon } from "../../common/icons/DocumentArrowUpIcon";
 import { ClipboardDocumentIcon } from "../../common/icons/ClipboardDocumentIcon";
 import { BookOpenIcon } from "../../common/icons/BookOpenIcon";
 import { contentService } from "../../../services/api";
-
-const TrashIcon = ({ className }: { className?: string }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    fill="none"
-    viewBox="0 0 24 24"
-    strokeWidth={1.5}
-    stroke="currentColor"
-    className={className}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
-    />
-  </svg>
-);
-
-// --- Video Icon Component ---
-const VideoIcon = ({ className }: { className?: string }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    fill="none"
-    viewBox="0 0 24 24"
-    strokeWidth={1.5}
-    stroke="currentColor"
-    className={className}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"
-    />
-  </svg>
-);
+import { TrashIcon, VideoCameraIcon, FileArrowUpIcon, PlayCircleIcon } from '@phosphor-icons/react';
 
 // --- ContentLibrary Component ---
 const ContentLibrary = ({
   onSelectCuratedText,
   onDeleteArticle,
+  onSelectVideo,
   targetLanguage,
   userArticles,
 }: {
   onSelectCuratedText: (text: CuratedText | ReadingContent) => void;
+  onSelectVideo: (video: ReadingContent) => void;
   onDeleteArticle: (id: string) => void;
   targetLanguage: string;
   userArticles: ReadingContent[];
@@ -58,6 +26,10 @@ const ContentLibrary = ({
   );
 
   const levels: CuratedText["level"][] = ["A1", "A2", "B1", "B2", "C1", "C2"];
+
+  const isVideoContent = (article: ReadingContent) => {
+    return article.source_url?.match(/\.(mp4|webm|mov)$/i) || article.title?.includes("(Video)");
+  };
 
   const LEVEL_COLORS: Record<string, string> = {
     A1: "bg-green-500/20 text-green-400 border-green-500/30",
@@ -77,51 +49,54 @@ const ContentLibrary = ({
               Your Imports
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {(userArticles || []).map((article) => (
-                <div
-                  key={article.id}
-                  className="relative group"
-                >
-                <button
-                  onClick={() => onSelectCuratedText(article)}
-                  className="w-full bg-slate-800/40 border border-slate-700/50 p-4 rounded-xl text-left hover:bg-slate-700/50 transition-all"
-                >
-                  <div className="flex justify-between items-start mb-2 pr-6">
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                        article.difficulty_score ? LEVEL_COLORS[article.difficulty_score] || "bg-slate-700 text-slate-400" : "bg-slate-700 text-slate-400"
+              {(userArticles || []).map((article) => {
+                const isVideo = isVideoContent(article);
+                
+                return (
+                  <div key={article.id} className="relative group">
+                    <button
+                      onClick={() => isVideo ? onSelectVideo(article) : onSelectCuratedText(article)}
+                      className={`w-full border p-4 rounded-xl text-left transition-all ${
+                          isVideo 
+                          ? 'bg-slate-800/60 border-indigo-500/30 hover:bg-slate-700/60 hover:border-indigo-500/50' 
+                          : 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-700/50'
                       }`}
                     >
-                      {article.difficulty_score || "New"}
-                    </span>
-                  </div>
-                  <div className="font-bold text-white group-hover:text-sky-400 transition-colors">
-                    {article.title || 'Untitled'}
-                  </div>
-                  <div className="text-xs text-slate-500 line-clamp-1 mt-1">
-                    {article.content.substring(0, 100)}...
-                  </div>
-                </button>
+                      <div className="flex justify-between items-start mb-2 pr-6">
+                        {isVideo ? (
+                            <div className="flex items-center gap-2 bg-indigo-500/20 px-2 py-1 rounded text-indigo-300 border border-indigo-500/20">
+                                <VideoCameraIcon className="w-3 h-3" />
+                                <span className="text-[10px] font-bold uppercase">Video</span>
+                            </div>
+                        ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-slate-700 text-slate-400">
+                                Text
+                            </span>
+                        )}
+                      </div>
+                      <div className="font-bold text-white group-hover:text-sky-400 transition-colors flex items-center gap-2">
+                        {isVideo && <PlayCircleIcon className="w-5 h-5 text-indigo-400" />}
+                        {article.title || 'Untitled'}
+                      </div>
+                      <div className="text-xs text-slate-500 line-clamp-1 mt-1">
+                        {isVideo ? "Interactive video session" : (article.content.substring(0, 100) + "...")}
+                      </div>
+                    </button>
 
-                {/* DELETE BUTTON */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation(); // Prevents opening the article
-                    if (
-                      window.confirm(
-                        "Are you sure you want to delete this text?",
-                      )
-                    ) {
-                      onDeleteArticle(article.id);
-                    }
-                  }}
-                  className="absolute top-3 right-3 p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                  title="Delete"
-                >
-                  <TrashIcon className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm("Are you sure you want to delete this item?")) {
+                          onDeleteArticle(article.id);
+                        }
+                      }}
+                      className="absolute top-3 right-3 p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
@@ -175,15 +150,17 @@ const ContentLibrary = ({
 // --- ReaderView Component ---
 interface ReaderViewProps {
   onStartReadingSession: (textData: ActiveReadingText) => void;
+  onStartVideoSession: (videoData: ReadingContent) => void;
   onFetchArticle: (url: string) => Promise<string | null>;
   onFileUpload: (file: File) => Promise<string | null>;
   isFileProcessing: boolean;
   targetLanguage: string;
-  setCurrentView?: (view: View) => void; // NEW: For navigating to video view
+  setCurrentView?: (view: View) => void;
 }
 
 export const ReaderView = ({
   onStartReadingSession,
+  onStartVideoSession,
   targetLanguage,
   isFileProcessing: externalIsProcessing,
   setCurrentView,
@@ -219,6 +196,65 @@ export const ReaderView = ({
     } catch (err) {
       console.error("Failed to delete content", err);
       alert("Failed to delete content. Please try again.");
+    }
+  };
+
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    e.target.value = ""; // Reset input
+
+    // Validation
+    const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(file.name);
+    if (!isVideo) {
+      alert("Please upload a video file (MP4, WEBM, or MOV)");
+      return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      alert("Video file is too large. Maximum size is 50MB.");
+      return;
+    }
+
+    setLocalFileProcessing(true);
+
+    try {
+      // 1. Prepare FormData
+      const formData = new FormData();
+      formData.append('file', file);
+      // Optional: Add metadata like target_language if your backend supports it on upload
+      formData.append('target_language', targetLanguage); 
+
+      // 2. Upload to Backend (Assuming an endpoint exists, otherwise use a generic content upload)
+      // If you don't have a specific video endpoint, this might need adjustment based on your API
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch('http://localhost:8000/content/upload-video', {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const newContent: ReadingContent = await response.json();
+
+      // 3. Update Library UI
+      setUserArticles((prev) => [newContent, ...prev]);
+
+      // 4. Start Session
+      onStartVideoSession(newContent);
+
+    } catch (err: any) {
+      console.error("Video upload error:", err);
+      alert(`Failed to upload video: ${err.message || 'Unknown error'}`);
+    } finally {
+      setLocalFileProcessing(false);
     }
   };
 
@@ -357,44 +393,6 @@ export const ReaderView = ({
     }
   };
 
-  // NEW: Handle video file upload
-  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    e.target.value = "";
-
-    // Check if it's a video file
-    const isVideo = file.type.startsWith('video/') ||
-                    /\.(mp4|webm|mov)$/i.test(file.name);
-
-    if (!isVideo) {
-      alert("Please upload a video file (MP4, WEBM, or MOV)");
-      return;
-    }
-
-    // Check file size (50MB limit)
-    const maxSize = 50 * 1024 * 1024; // 50MB
-    if (file.size > maxSize) {
-      alert("Video file is too large. Maximum size is 50MB.");
-      return;
-    }
-
-    // Navigate to VideoLearningView with the file
-    if (setCurrentView) {
-      // Store the file temporarily (we'll handle this in VideoLearningView)
-      sessionStorage.setItem('pendingVideoFile', file.name);
-      // We can't pass the file object directly through navigation
-      // So we'll create an object URL and pass it
-      const videoUrl = URL.createObjectURL(file);
-      sessionStorage.setItem('pendingVideoUrl', videoUrl);
-      sessionStorage.setItem('pendingVideoFileName', file.name);
-
-      setCurrentView(View.VideoLearning);
-    } else {
-      alert("Video upload feature requires navigation support.");
-    }
-  };
 
   const handlePaste = async () => {
     try {
@@ -483,7 +481,7 @@ export const ReaderView = ({
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
                 <div className="relative group">
                   <div className="relative flex flex-col items-center justify-center bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-lg p-4 text-center transition-all h-full">
-                    <DocumentArrowUpIcon className="w-6 h-6 text-indigo-400 mb-2" />
+                    <FileArrowUpIcon className="w-6 h-6 text-indigo-400 mb-2" />
                     <span className="text-xs font-bold text-slate-300 mb-0.5">
                       Upload Text
                     </span>
@@ -512,9 +510,7 @@ export const ReaderView = ({
 
                 <div className="relative group">
                   <div className="relative flex flex-col items-center justify-center bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-lg p-4 text-center transition-all h-full">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-red-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
+                    <FileArrowUpIcon className="w-6 h-6 text-red-400 mb-2" />
                     <span className="text-xs font-bold text-slate-300 mb-0.5">
                       Upload PDF
                     </span>
@@ -553,15 +549,14 @@ export const ReaderView = ({
                 </button>
               </div>
 
-              {/* NEW: Video Upload */}
               <div className="relative group">
-                <div className="relative flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/30 to-pink-900/30 hover:from-purple-800/40 hover:to-pink-800/40 border border-purple-500/30 rounded-lg p-4 text-center transition-all">
-                  <VideoIcon className="w-6 h-6 text-purple-400 mb-2" />
+                <div className="relative flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/30 to-pink-900/30 hover:from-purple-800/40 hover:to-pink-800/40 border border-purple-500/30 rounded-lg p-4 text-center transition-all h-full">
+                  <VideoCameraIcon className="w-6 h-6 text-purple-400 mb-2" />
                   <span className="text-xs font-bold text-purple-300 mb-0.5">
                     Upload Video
                   </span>
                   <span className="text-[10px] text-purple-400/70">
-                    MP4, WEBM, MOV (max 50MB)
+                    MP4, WEBM (max 50MB)
                   </span>
                   <label
                     className="absolute inset-0 cursor-pointer"
@@ -572,8 +567,14 @@ export const ReaderView = ({
                       accept="video/mp4,video/webm,video/mov"
                       onChange={handleVideoUpload}
                       className="hidden"
+                      disabled={localFileProcessing}
                     />
                   </label>
+                  {localFileProcessing && (
+                      <div className="absolute inset-0 bg-slate-900/80 flex items-center justify-center rounded-lg z-10">
+                        <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                      </div>
+                    )}
                 </div>
               </div>
             </div>
@@ -595,6 +596,7 @@ export const ReaderView = ({
                 content: text.content,
               })
             }
+            onSelectVideo={(video) => onStartVideoSession(video)}
             onDeleteArticle={handleDelete}
             targetLanguage={targetLanguage}
             userArticles={userArticles}

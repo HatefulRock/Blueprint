@@ -542,3 +542,46 @@ class StudySessionRequest(BaseModel):
     session_date: date = Field(default_factory=date.today)
     duration_minutes: Optional[int] = None
     limit: Optional[int] = 20
+
+
+# --- Conversation Session Schemas ---
+class ConversationMessageCreate(BaseModel):
+    author: str  # 'user' or 'ai'
+    text: str
+
+
+class ConversationMessageRead(BaseModel):
+    id: UUID
+    author: str
+    text: str
+    timestamp: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class ConversationSessionCreate(BaseModel):
+    scenario: str
+    target_language: str
+
+
+class ConversationSessionRead(BaseModel):
+    id: UUID
+    scenario: str
+    target_language: str
+    created_at: datetime
+    messages: List[ConversationMessageRead] = []
+
+    class Config:
+        orm_mode = True
+
+
+class ConversationSessionListItem(BaseModel):
+    id: UUID
+    scenario: str
+    target_language: str
+    created_at: datetime
+    message_count: int
+
+    class Config:
+        orm_mode = True

@@ -300,4 +300,29 @@ export const analyticsService = {
     }),
 };
 
+export const conversationService = {
+  // Create a new conversation session
+  createSession: (payload: { scenario: string; target_language: string }) =>
+    api.post("/conversation/sessions", payload),
+
+  // List user's conversation sessions
+  listSessions: (limit: number = 20, offset: number = 0) =>
+    api.get("/conversation/sessions", { params: { limit, offset } }),
+
+  // Get a specific session with messages
+  getSession: (sessionId: string) =>
+    api.get(`/conversation/sessions/${sessionId}`),
+
+  // Save messages to a session
+  saveMessages: (sessionId: string, messages: Array<{ author: string; text: string }>) =>
+    api.post(`/conversation/sessions/${sessionId}/messages`, messages),
+
+  // Delete a session
+  deleteSession: (sessionId: string) =>
+    api.delete(`/conversation/sessions/${sessionId}`),
+
+  // Get live config (API key and model)
+  getLiveConfig: () => api.get("/conversation/live-config"),
+};
+
 export default api;
