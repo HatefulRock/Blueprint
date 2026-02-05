@@ -86,19 +86,116 @@ class GeminiService:
 
     @staticmethod
     def generate_practice_quiz(words: list, target_language: str):
-        prompt = f"Create a 5-question quiz for a student learning {target_language}. Focus on these words: {', '.join(words)}. Return JSON array of objects {'{question, options, answer, explanation}'}"
+        """
+        Generate a short quiz for a list of target words.
+        words can be a list of strings or dicts with term/translation/context.
+        """
+        formatted_words = []
+        for w in words:
+            if isinstance(w, dict):
+                formatted_words.append(
+                    {
+                        "term": w.get("term", ""),
+                        "translation": w.get("translation", ""),
+                        "context": w.get("context", ""),
+                    }
+                )
+            else:
+                formatted_words.append({"term": str(w), "translation": "", "context": ""})
+
+        prompt = f"""
+        Create a 5-question quiz for a student learning {target_language}.
+        Focus on these words and contexts:
+        {json.dumps(formatted_words)}
+
+        Return ONLY JSON with this structure:
+        {{
+          "questions": [
+            {{
+              "question": "string",
+              "options": ["A", "B", "C", "D"],
+              "answer": "string",
+              "explanation": "string"
+            }}
+          ]
+        }}
+        """
+
         response = client.models.generate_content(
             model=GEMINI_MODELS["default"],
             contents=prompt,
             config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=schemas.QuizResponse
-                ),
+                response_mime_type="application/json",
+                response_schema=schemas.QuizResponse,
+            ),
         )
+        if response.parsed:
+            return response.parsed.model_dump()
         try:
             return json.loads(response.text)
         except Exception:
-            return response.text
+            return {"questions": []}
+
+    @staticmethod
+    def check_grammar_simple(text: str, language: str) -> dict:
+        prompt = f"""
+        Act as a strict grammar teacher for {language}.
+        Analyze this sentence provided by a student: "{text}"
+
+        If it is perfectly correct, set "is_correct" to true, "corrected" to the original text,
+        and "explanation" to "Perfect!".
+        If there are errors, provide the corrected version and explain the grammatical rule.
+
+        Return ONLY JSON with keys: corrected, explanation, is_correct.
+        """
+
+        response = client.models.generate_content(
+            model=GEMINI_MODELS["default"],
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=schemas.SimpleGrammarCheckResponse,
+            ),
+        )
+        if response.parsed:
+            return response.parsed.model_dump()
+        try:
+            return json.loads(response.text)
+        except Exception:
+            return {"corrected": text, "explanation": "Unable to check grammar.", "is_correct": False}
+
+    @staticmethod
+    def evaluate_translation(
+        original_text: str,
+        user_translation: str,
+        target_language: str,
+        native_language: str,
+    ) -> dict:
+        prompt = f"""
+        Evaluate the user's translation of a text from {target_language} to {native_language} (or vice versa).
+
+        Original Text: "{original_text}"
+        User's Translation: "{user_translation}"
+
+        Determine if the meaning is preserved and grammatically correct.
+
+        Return ONLY JSON with keys: is_correct (boolean), feedback (string).
+        """
+
+        response = client.models.generate_content(
+            model=GEMINI_MODELS["default"],
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=schemas.TranslationEvaluationResponse,
+            ),
+        )
+        if response.parsed:
+            return response.parsed.model_dump()
+        try:
+            return json.loads(response.text)
+        except Exception:
+            return {"is_correct": False, "feedback": "Unable to evaluate translation."}
 
     @staticmethod
     def process_audio_tutor(

@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
+from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -20,11 +21,18 @@ router = APIRouter(prefix="/practice", tags=["practice"])
 
 # --- Helper ---
 
-def verify_deck_ownership(db: Session, deck_id: str, user_id: str):
-    deck = db.query(models.Deck).filter(models.Deck.id == deck_id).first()
+def to_uuid(value) -> UUID:
+    """Convert string or UUID to UUID object."""
+    if isinstance(value, UUID):
+        return value
+    return UUID(str(value))
+
+def verify_deck_ownership(db: Session, deck_id, user_id):
+    deck_uuid = to_uuid(deck_id)
+    deck = db.query(models.Deck).filter(models.Deck.id == deck_uuid).first()
     if not deck:
         raise HTTPException(status_code=404, detail="Deck not found")
-    if str(deck.user_id) != str(user_id):
+    if deck.user_id != to_uuid(user_id):
         logger.warning(f"User {user_id} attempted to access deck {deck_id} owned by {deck.user_id}")
         raise HTTPException(status_code=403, detail="Access denied to this deck")
     return deck
@@ -41,12 +49,13 @@ async def get_ai_practice_quiz(
     Generate an AI-powered quiz from due words or low-familiarity words.
     """
     deck = verify_deck_ownership(db, deck_id, current_user.id)
+    deck_uuid = to_uuid(deck_id)
 
     # 1. Fetch candidate words (due first, then low familiarity)
     now = datetime.now(timezone.utc)
     words = (
         db.query(Word)
-        .filter(Word.deck_id == deck_id, Word.next_review_date <= now)
+        .filter(Word.deck_id == deck_uuid, Word.next_review_date <= now)
         .limit(15)
         .all()
     )
@@ -55,7 +64,7 @@ async def get_ai_practice_quiz(
         logger.info(f"No due words for deck {deck_id}, falling back to low familiarity words.")
         words = (
             db.query(Word)
-            .filter(Word.deck_id == deck_id)
+            .filter(Word.deck_id == deck_uuid)
             .order_by(Word.familiarity_score.asc())
             .limit(10)
             .all()
@@ -99,7 +108,8 @@ def create_study_session(
     query = db.query(models.Card)
     if deck_id:
         verify_deck_ownership(db, deck_id, current_user.id)
-        query = query.filter(models.Card.deck_id == deck_id)
+        deck_uuid = to_uuid(deck_id)
+        query = query.filter(models.Card.deck_id == deck_uuid)
     else:
         query = query.join(models.Deck).filter(models.Deck.user_id == current_user.id)
 
@@ -148,7 +158,7 @@ def create_study_session(
 
 @router.get("/sessions", response_model=Dict[str, Any])
 def list_practice_sessions(
-    limit: int = 20, 
+    limit: int = 20,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -163,7 +173,16 @@ def list_practice_sessions(
         )
 
         return {
-            "sessions": sessions,
+            "sessions": [
+                {
+                    "id": str(s.id),
+                    "session_type": s.session_type,
+                    "language": s.language,
+                    "score": s.score,
+                    "timestamp": s.timestamp.isoformat() if s.timestamp else None,
+                }
+                for s in sessions
+            ],
             "count": len(sessions)
         }
     except SQLAlchemyError as e:
@@ -178,8 +197,9 @@ def update_session_score(
     db: Session = Depends(get_db)
 ):
     """Update the final score of a practice session."""
+    session_uuid = to_uuid(session_id)
     session = db.query(models.PracticeSession).filter(
-        models.PracticeSession.id == session_id,
+        models.PracticeSession.id == session_uuid,
         models.PracticeSession.user_id == current_user.id
     ).first()
 
@@ -193,3 +213,143 @@ def update_session_score(
     except SQLAlchemyError:
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to update score")
+
+
+@router.post("/review", response_model=schemas.ReviewResponse)
+def submit_review(
+    payload: schemas.ReviewSubmission,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Submit a single card review with full telemetry.
+
+    This endpoint captures enhanced review data including:
+    - Response time (how long user took to answer)
+    - Confidence rating (user's self-assessment)
+    - Answer text (what user entered)
+
+    The SRS algorithm uses this data to:
+    - Update card scheduling with SM-2
+    - Detect and flag "leech" cards (cards with 8+ failures)
+    - Give bonus intervals for fast correct answers
+
+    Args:
+        payload: ReviewSubmission with card_id, quality (0-5), and optional telemetry
+
+    Returns:
+        ReviewResponse with next review date and leech status
+    """
+    # Find the card
+    card = db.query(models.Card).filter(models.Card.id == payload.card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Card not found")
+
+    # Verify ownership through deck
+    deck = db.query(models.Deck).filter(models.Deck.id == card.deck_id).first()
+    if not deck or str(deck.user_id) != str(current_user.id):
+        logger.warning(f"User {current_user.id} attempted to review card {payload.card_id} they don't own")
+        raise HTTPException(status_code=403, detail="Access denied to this card")
+
+    try:
+        # Update card via enhanced SRS
+        from services.srs import update_card_after_review
+        update_card_after_review(card, payload.quality, payload.response_time_ms)
+
+        # Create review record with telemetry
+        review = models.PracticeReview(
+            user_id=current_user.id,
+            card_id=card.id,
+            quality=payload.quality,
+            response_time_ms=payload.response_time_ms,
+            confidence=payload.confidence,
+            answer_text=payload.answer_text,
+            is_correct=payload.quality >= 3
+        )
+        db.add(review)
+        db.commit()
+
+        logger.info(f"Review submitted: card={card.id}, quality={payload.quality}, leech={card.is_leech}")
+
+        return schemas.ReviewResponse(
+            ok=True,
+            next_review_date=card.next_review_date,
+            is_leech=card.is_leech or False,
+            lapses=card.lapses or 0,
+            total_reviews=card.total_reviews or 0
+        )
+
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Database error submitting review: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to submit review")
+
+
+@router.get("/leeches")
+def get_leech_cards(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all cards flagged as leeches (difficult cards with 8+ failures).
+
+    Leeches are cards that the user repeatedly fails. These should be
+    reviewed with different strategies (mnemonics, breaking down, etc.)
+    """
+    leech_cards = (
+        db.query(models.Card)
+        .join(models.Deck)
+        .filter(
+            models.Deck.user_id == current_user.id,
+            models.Card.is_leech == True
+        )
+        .order_by(models.Card.lapses.desc())
+        .all()
+    )
+
+    return {
+        "count": len(leech_cards),
+        "cards": [
+            {
+                "id": card.id,
+                "front": card.front,
+                "back": card.back,
+                "lapses": card.lapses,
+                "total_reviews": card.total_reviews,
+                "deck_id": card.deck_id,
+            }
+            for card in leech_cards
+        ]
+    }
+
+
+@router.post("/leeches/{card_id}/reset")
+def reset_leech(
+    card_id: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Reset a card's leech status after user has addressed the problem.
+
+    Use this after modifying the card (adding mnemonics, simplifying, etc.)
+    to give it a fresh start.
+    """
+    card_uuid = to_uuid(card_id)
+    card = db.query(models.Card).filter(models.Card.id == card_uuid).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Card not found")
+
+    # Verify ownership
+    deck = db.query(models.Deck).filter(models.Deck.id == card.deck_id).first()
+    if not deck or deck.user_id != to_uuid(current_user.id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    try:
+        from services.srs import reset_leech_status
+        reset_leech_status(card)
+        db.commit()
+        return {"ok": True, "message": "Leech status reset"}
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to reset leech status")

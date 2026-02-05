@@ -4,6 +4,7 @@ from typing import List
 import json
 import os
 from datetime import datetime
+from uuid import UUID
 
 from google import genai
 from google.genai import types
@@ -13,6 +14,14 @@ import schemas
 from services.auth import get_current_user
 from services.database import get_db
 from config.gemini_models import GEMINI_MODELS
+from services.cache import cache
+
+
+def to_uuid(value) -> UUID:
+    """Convert string or UUID to UUID object."""
+    if isinstance(value, UUID):
+        return value
+    return UUID(str(value))
 
 router = APIRouter(prefix="/grammar", tags=["grammar"])
 
@@ -136,14 +145,15 @@ async def get_exercise_sets(
 
 @router.get("/sets/{set_id}", response_model=schemas.GrammarExerciseSetRead)
 async def get_exercise_set(
-    set_id: int,
+    set_id: str,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get a specific exercise set with all exercises."""
+    set_uuid = to_uuid(set_id)
     exercise_set = (
         db.query(models.GrammarExerciseSet)
-        .filter(models.GrammarExerciseSet.id == set_id)
+        .filter(models.GrammarExerciseSet.id == set_uuid)
         .first()
     )
 
@@ -239,14 +249,15 @@ async def check_answer(
 
 @router.delete("/sets/{set_id}")
 async def delete_exercise_set(
-    set_id: int,
+    set_id: str,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Delete an exercise set."""
+    set_uuid = to_uuid(set_id)
     exercise_set = (
         db.query(models.GrammarExerciseSet)
-        .filter(models.GrammarExerciseSet.id == set_id)
+        .filter(models.GrammarExerciseSet.id == set_uuid)
         .first()
     )
 
@@ -264,14 +275,15 @@ async def delete_exercise_set(
 
 @router.get("/sets/{set_id}/progress")
 async def get_exercise_progress(
-    set_id: int,
+    set_id: str,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get detailed progress for an exercise set."""
+    set_uuid = to_uuid(set_id)
     exercise_set = (
         db.query(models.GrammarExerciseSet)
-        .filter(models.GrammarExerciseSet.id == set_id)
+        .filter(models.GrammarExerciseSet.id == set_uuid)
         .first()
     )
 
@@ -330,8 +342,9 @@ async def get_grammar_patterns(
         # Create cache key
         cache_key = f"grammar_patterns:{language}:{level}"
 
-        # TODO: Check cache first (implement Redis/in-memory cache)
-        # For now, we'll generate fresh each time
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
 
         level_filter = level if level != "all" else "A1 to C2"
 
@@ -437,8 +450,7 @@ Return comprehensive JSON with this structure:
 
         result = json.loads(response.text)
 
-        # TODO: Cache the result
-        # await cache_service.set(cache_key, result, ttl=60*60*24*7)  # 7 days
+        cache.set(cache_key, result, ttl=60 * 60 * 24 * 7)
 
         return result
 

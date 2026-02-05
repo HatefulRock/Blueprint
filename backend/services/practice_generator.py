@@ -1,4 +1,3 @@
-import json
 from typing import List
 from .gemini import GeminiService
 
@@ -21,38 +20,9 @@ class PracticeGenerator:
             for w in words_list
         ]
 
-        prompt = f"""
-        You are an expert {target_language} teacher.
-        Create a language quiz based on these specific words the student is struggling with:
-        {json.dumps(simplified_words)}
-
-        For each word, create a question. Vary the types between:
-        1. 'cloze': A fill-in-the-blank sentence (use the provided context if possible).
-        2. 'multiple_choice': Find the correct translation or meaning.
-
-        Return a JSON array of objects:
-        [
-          {{
-            "word": "the target word",
-            "type": "cloze" | "multiple_choice",
-            "question": "The question text. If cloze, use ____ for the blank.",
-            "choices": ["option A", "option B", "option C", "option D"], (Include this ONLY for multiple_choice)
-            "answer": "the correct string",
-            "explanation": "A brief explanation of why this is correct in the context."
-          }}
-        ]
-
-        Rules:
-        - Choices for multiple choice must be in the same language as the answer.
-        - If 'cloze', the sentence should be natural and helpful.
-        - Return ONLY JSON.
-        """
-
         try:
-            # Use GeminiService to generate a quiz. GeminiService.generate_practice_quiz
-            # returns parsed JSON (or None on failure).
             response = GeminiService.generate_practice_quiz(
-                [w["term"] for w in simplified_words], target_language
+                simplified_words, target_language
             )
             return response
         except Exception as e:

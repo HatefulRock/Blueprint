@@ -13,7 +13,7 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 @router.get("/practice")
 def practice_stats(
-    user_id: int = Query(..., description="User id"),
+    current_user: models.User = Depends(get_current_user),
     date_from: Optional[str] = Query(None, description="ISO date string, inclusive"),
     date_to: Optional[str] = Query(None, description="ISO date string, inclusive"),
     db: Session = Depends(get_db),
@@ -37,7 +37,7 @@ def practice_stats(
     # Total sessions
     total_sessions = (
         db.query(func.count(models.PracticeSession.id))
-        .filter(models.PracticeSession.user_id == user_id)
+        .filter(models.PracticeSession.user_id == current_user.id)
         .filter(models.PracticeSession.timestamp >= from_dt)
         .filter(models.PracticeSession.timestamp <= to_dt)
         .scalar()
@@ -46,7 +46,7 @@ def practice_stats(
     # Total reviews and average quality
     total_reviews = (
         db.query(func.count(models.PracticeReview.id))
-        .filter(models.PracticeReview.user_id == user_id)
+        .filter(models.PracticeReview.user_id == current_user.id)
         .filter(models.PracticeReview.timestamp >= from_dt)
         .filter(models.PracticeReview.timestamp <= to_dt)
         .scalar()
@@ -54,7 +54,7 @@ def practice_stats(
 
     avg_quality = (
         db.query(func.avg(models.PracticeReview.quality))
-        .filter(models.PracticeReview.user_id == user_id)
+        .filter(models.PracticeReview.user_id == current_user.id)
         .filter(models.PracticeReview.timestamp >= from_dt)
         .filter(models.PracticeReview.timestamp <= to_dt)
         .scalar()
@@ -71,7 +71,7 @@ def practice_stats(
             func.count(models.PracticeReview.id).label("count"),
             func.avg(models.PracticeReview.quality).label("avg_quality"),
         )
-        .filter(models.PracticeReview.user_id == user_id)
+        .filter(models.PracticeReview.user_id == current_user.id)
         .filter(models.PracticeReview.timestamp >= from_dt)
         .filter(models.PracticeReview.timestamp <= to_dt)
         .group_by(func.date(models.PracticeReview.timestamp))
@@ -94,7 +94,7 @@ def practice_stats(
             models.PracticeReview.card_id,
             func.count(models.PracticeReview.id).label("cnt"),
         )
-        .filter(models.PracticeReview.user_id == user_id)
+        .filter(models.PracticeReview.user_id == current_user.id)
         .filter(models.PracticeReview.timestamp >= from_dt)
         .filter(models.PracticeReview.timestamp <= to_dt)
         .group_by(models.PracticeReview.card_id)
@@ -117,7 +117,7 @@ def practice_stats(
             )
 
     return {
-        "user_id": user_id,
+        "user_id": current_user.id,
         "from": from_dt.isoformat(),
         "to": to_dt.isoformat(),
         "total_sessions": int(total_sessions or 0),

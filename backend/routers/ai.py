@@ -29,6 +29,50 @@ async def analyze_text(request: schemas.AnalysisRequest):
         logger.error(f"AI Analysis failed for text: '{request.text[:50]}...'", exc_info=True)
         raise HTTPException(status_code=500, detail=f"AI Analysis failed: {str(e)}")
 
+@router.post("/grammar-check", response_model=schemas.SimpleGrammarCheckResponse)
+async def grammar_check(request: schemas.SimpleGrammarCheckRequest):
+    """
+    Lightweight grammar check for short practice inputs.
+    """
+    try:
+        result = GeminiService.check_grammar_simple(request.text, request.language)
+        return result
+    except Exception as e:
+        logger.error("Grammar check failed", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/translation-eval", response_model=schemas.TranslationEvaluationResponse)
+async def translation_eval(request: schemas.TranslationEvaluationRequest):
+    """
+    Evaluate translation quality for practice checks.
+    """
+    try:
+        result = GeminiService.evaluate_translation(
+            request.original_text,
+            request.user_translation,
+            request.target_language,
+            request.native_language,
+        )
+        return result
+    except Exception as e:
+        logger.error("Translation evaluation failed", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/tts", response_model=schemas.TextToSpeechResponse)
+async def text_to_speech(request: schemas.TextToSpeechRequest):
+    """
+    Return base64-encoded MP3 audio for the given text.
+    """
+    try:
+        audio_base64 = GeminiService.text_to_speech(
+            text=request.text,
+            language=request.language,
+        )
+        return {"audio_base64": audio_base64}
+    except Exception as e:
+        logger.error("Text-to-speech failed", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/explain-grammar")
 async def explain_grammar(request: schemas.ExplanationRequest):
     """

@@ -342,6 +342,38 @@ class GrammarCheckResponse(BaseModel):
     feedback: str
 
 
+class SimpleGrammarCheckRequest(BaseModel):
+    text: str
+    language: str
+
+
+class SimpleGrammarCheckResponse(BaseModel):
+    corrected: str
+    explanation: str
+    is_correct: bool
+
+
+class TranslationEvaluationRequest(BaseModel):
+    original_text: str
+    user_translation: str
+    target_language: str
+    native_language: str
+
+
+class TranslationEvaluationResponse(BaseModel):
+    is_correct: bool
+    feedback: str
+
+
+class TextToSpeechRequest(BaseModel):
+    text: str
+    language: str = "en"
+
+
+class TextToSpeechResponse(BaseModel):
+    audio_base64: str
+
+
 class EssayFeedbackRequest(BaseModel):
     text: str
     language: str
@@ -542,6 +574,25 @@ class StudySessionRequest(BaseModel):
     session_date: date = Field(default_factory=date.today)
     duration_minutes: Optional[int] = None
     limit: Optional[int] = 20
+
+
+# --- Enhanced Review Telemetry Schemas ---
+class ReviewSubmission(BaseModel):
+    """Submit a card review with full telemetry data."""
+    card_id: UUID
+    quality: int = Field(..., ge=0, le=5, description="SM-2 quality rating (0-5)")
+    response_time_ms: Optional[int] = Field(None, description="Time taken to answer in milliseconds")
+    confidence: Optional[int] = Field(None, ge=1, le=5, description="User-reported confidence (1-5)")
+    answer_text: Optional[str] = Field(None, description="What the user entered")
+
+
+class ReviewResponse(BaseModel):
+    """Response after submitting a review."""
+    ok: bool
+    next_review_date: datetime
+    is_leech: bool
+    lapses: int
+    total_reviews: int
 
 
 # --- Conversation Session Schemas ---

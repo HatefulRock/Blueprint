@@ -1,7 +1,7 @@
 import time
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, users, words, content, ai, conversation, leaderboard, analytics, writing, grammar, templates, vocab, practice, video
+from routers import auth, users, words, content, ai, conversation, leaderboard, analytics, writing, grammar, templates, vocab, practice, video, unified_practice, diagnostic, recommendations, community
 from models import (
     User,
     Deck,
@@ -132,6 +132,10 @@ app.include_router(templates.router)
 app.include_router(vocab.router)
 app.include_router(practice.router)
 app.include_router(video.router)
+app.include_router(unified_practice.router)
+app.include_router(diagnostic.router)
+app.include_router(recommendations.router)
+app.include_router(community.router)
 
 @app.get("/")
 def root():
